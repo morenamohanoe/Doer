@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --color-brand: #FF6B00;
+  --color-brand-hover: #E05E00;
+  --color-brand-light: #FFF0E6;
+  --color-brand-dark: #CC5500;
+}
+
+/* Custom horizontal scrollbar hide */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body {
+  background-color: #F4F4F5;
+  color: #18181B;
+  font-family: var(--font-sans);
+}
+
+/* 📐 Geometric Balance Theme Utilities */
+.geom-card {
+  border-radius: 28px 8px 28px 8px !important;
+}
+
+.geom-card-sm {
+  border-radius: 18px 4px 18px 4px !important;
+}
+
+.geom-card-lg {
+  border-radius: 36px 12px 36px 12px !important;
+}
+
+.geom-skew-sm {
+  transform: skewX(-4deg);
+}
+
+.geom-skew-sm-inner {
+  transform: skewX(4deg);
+}
+
+.geom-skew-lg {
+  transform: skewX(-6deg);
+}
+
+.geom-skew-lg-inner {
+  transform: skewX(6deg);
+}
+
+.geom-border-thick {
+  border-width: 1px 2px 2px 1px !important;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+}

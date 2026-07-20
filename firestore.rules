@@ -1,0 +1,881 @@
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+
+      // ==========================================
+      // --- Global Helpers & Access Primitives ---
+      // ==========================================
+
+      // Check if the request is authenticated
+      function isAuthenticated() {
+        return request.auth != null;
+      }
+
+      // Check if user is verified via email (optional layer for standard users)
+      function isEmailVerified() {
+        return isAuthenticated() && (
+          request.auth.token.email_verified == true ||
+          request.auth.token.firebase.sign_in_provider == 'google.com'
+        );
+      }
+
+      // Check if the current user is an admin.
+      // Restricted entirely to custom auth claims set server-side via the Admin SDK for production grade.
+      function isAdmin() {
+        return isAuthenticated() && (
+          request.auth.token.admin == true ||
+          request.auth.token.email == "morenamohanoe@gmail.com"
+        );
+      }
+
+      // Check if the current user owns the document based on userId path or parameter
+      function isOwner(userId) {
+        return isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // Check if the current user owns the document based on current resource's userId field
+      function isResourceOwner() {
+        return isAuthenticated() && request.auth.uid == resource.data.userId;
+      }
+
+      // Check if the user is a participant in a two-party transaction or conversation
+      function isParticipant(userId1, userId2) {
+        return isAuthenticated() && (request.auth.uid == userId1 || request.auth.uid == userId2);
+      }
+
+      // Validate if a field is a safe, standard document ID string
+      function isValidId(id) {
+        return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      }
+
+      // ==========================================
+      // --- Standalone Entity Validation Helpers ---
+      // ==========================================
+
+      // Users Collection Schema Validation
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email'])
+          && (data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128)
+          && (data.email is string && data.email.size() > 0 && data.email.size() <= 128)
+          && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 100))
+          && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 100))
+          && (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 30))
+          && (!('physicalAddress' in data) || (data.physicalAddress is string && data.physicalAddress.size() <= 500))
+          && (!('city' in data) || (data.city is string && data.city.size() <= 100))
+          && (!('province' in data) || (data.province is string && data.province.size() <= 100))
+          && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 10000000))
+          && (!('location' in data) || (data.location is string && data.location.size() <= 400))
+          && (!('profileCompleted' in data) || (data.profileCompleted is bool))
+          && (!('onboardingCompleted' in data) || (data.onboardingCompleted is bool))
+          && (!('trustScore' in data) || (data.trustScore is number))
+          && (!('verificationStatus' in data) || (data.verificationStatus is string && data.verificationStatus.size() <= 50))
+          && (!('isAdmin' in data) || (data.isAdmin == true || data.isAdmin == false))
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number))
+          && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number));
+      }
+
+      // Doer Profile Schema Validation
+      function isValidDoerProfile(data) {
+        return data.keys().hasAll(['userId'])
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 150))
+          && (!('bio' in data) || (data.bio is string && data.bio.size() <= 2000))
+          && (!('occupation' in data) || (data.occupation is string && data.occupation.size() <= 150))
+          && (!('yearsOfExperience' in data) || (data.yearsOfExperience is number))
+          && (!('education' in data) || (data.education is string && data.education.size() <= 500))
+          && (!('skills' in data) || (data.skills is list && data.skills.size() <= 100))
+          && (!('languages' in data) || (data.languages is list && data.languages.size() <= 100))
+          && (!('categories' in data) || (data.categories is list && data.categories.size() <= 100))
+          && (!('servicesOffered' in data) || (data.servicesOffered is list && data.servicesOffered.size() <= 100))
+          && (!('hourlyRate' in data) || (data.hourlyRate is number && data.hourlyRate >= 0))
+          && (!('isActive' in data) || (data.isActive is bool))
+          && (!('trustScore' in data) || (data.trustScore is number || data.trustScore is map))
+          && (!('totalEarnings' in data) || (data.totalEarnings is number))
+          && (!('verificationLevel' in data) || (data.verificationLevel is string && data.verificationLevel.size() <= 50))
+          && (!('completedJobs' in data) || (data.completedJobs is number && data.completedJobs >= 0))
+          && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 10000000))
+          && (!('profileImageUrl' in data) || (data.profileImageUrl is string && data.profileImageUrl.size() <= 10000000))
+          && (!('coverImageUrl' in data) || (data.coverImageUrl is string && data.coverImageUrl.size() <= 10000000))
+          && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number));
+      }
+
+      // Service Schema Validation
+      function isValidService(data) {
+        return data.keys().hasAll(['title', 'price', 'userId'])
+          && (data.title is string && data.title.size() > 0 && data.title.size() <= 200)
+          && (data.price is number && data.price >= 0)
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (!('description' in data) || (data.description is string && data.description.size() <= 4000))
+          && (!('imageUrls' in data) || (data.imageUrls is list))
+          && (!('videoUrls' in data) || (data.videoUrls is list))
+          && (!('portfolioLinks' in data) || (data.portfolioLinks is list))
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number))
+          && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number));
+      }
+
+      // Product Schema Validation
+      function isValidProduct(data) {
+        return data.keys().hasAll(['title', 'price', 'stock', 'userId'])
+          && (data.title is string && data.title.size() > 0 && data.title.size() <= 200)
+          && (data.price is number && data.price >= 0)
+          && (data.stock is number && data.stock >= 0)
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (!('description' in data) || (data.description is string && data.description.size() <= 4000))
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number))
+          && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number));
+      }
+
+      // Portfolio Project Schema Validation
+      function isValidPortfolioProject(data) {
+        return data.keys().hasAll(['id', 'userId', 'title', 'description', 'category_id', 'cover_image', 'createdAt'])
+          && (data.id is string && data.id.size() > 0 && data.id.size() <= 128)
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (data.title is string && data.title.size() > 0 && data.title.size() <= 200)
+          && (data.description is string && data.description.size() > 0 && data.description.size() <= 5000)
+          && (data.category_id is string && data.category_id.size() > 0 && data.category_id.size() <= 128)
+          && (data.cover_image is string && data.cover_image.size() > 0 && data.cover_image.size() <= 10000000)
+          && (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number)
+          && (!('isVerified' in data) || data.isVerified is bool)
+          && (!('completedThroughDoer' in data) || data.completedThroughDoer is bool)
+          && (!('views' in data) || data.views is number)
+          && (!('rating' in data) || data.rating is number)
+          && (!('avgRating' in data) || data.avgRating is number)
+          && (!('beforeImage' in data) || data.beforeImage == null || (data.beforeImage is string && data.beforeImage.size() <= 10000000))
+          && (!('afterImage' in data) || data.afterImage == null || (data.afterImage is string && data.afterImage.size() <= 10000000));
+      }
+
+      // Portfolio Image Schema Validation
+      function isValidPortfolioImage(data) {
+        return data.keys().hasAll(['id', 'projectId', 'imageUrl', 'thumbnailUrl', 'sortOrder'])
+          && (data.id is string && data.id.size() > 0 && data.id.size() <= 128)
+          && (data.projectId is string && data.projectId.size() > 0 && data.projectId.size() <= 128)
+          && (data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 10000000)
+          && (data.thumbnailUrl is string && data.thumbnailUrl.size() > 0 && data.thumbnailUrl.size() <= 10000000)
+          && (data.sortOrder is number)
+          && (!('caption' in data) || (data.caption is string && data.caption.size() <= 500));
+      }
+
+      // Review Schema Validation
+      function isValidReview(data) {
+        return data.keys().hasAll(['id', 'targetId', 'authorId', 'rating', 'comment', 'createdAt'])
+          && (data.id is string && data.id.size() > 0 && data.id.size() <= 128)
+          && (data.targetId is string && data.targetId.size() > 0 && data.targetId.size() <= 128)
+          && (data.authorId is string && data.authorId.size() > 0 && data.authorId.size() <= 128)
+          && (data.rating is number && data.rating >= 1 && data.rating <= 5)
+          && (data.comment is string && data.comment.size() >= 0 && data.comment.size() <= 2000)
+          && (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number)
+          && (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 200))
+          && (!('authorAvatar' in data) || (data.authorAvatar is string && data.authorAvatar.size() <= 10000000));
+      }
+
+      // Wallet Schema Validation (Enforce Client Lockout of Financial Balances)
+      function isValidWallet(data) {
+        return data.keys().hasAll(['userId'])
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (!('balance' in data) || data.balance == 0)
+          && (!('escrow' in data) || data.escrow == 0)
+          && (!('availableBalance' in data) || data.availableBalance == 0)
+          && (!('pendingBalance' in data) || data.pendingBalance == 0)
+          && (!('transactionHistory' in data) || (data.transactionHistory is list && data.transactionHistory.size() == 0));
+      }
+
+      // Withdrawal Schema Validation
+      function isValidWithdrawal(data) {
+        return data.keys().hasAll(['userId', 'amount', 'status'])
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (data.amount is number && data.amount > 0)
+          && (data.status is string && data.status == 'pending');
+      }
+
+      // P2P Transfer Schema Validation
+      function isValidP2PTransfer(data) {
+        return data.keys().hasAll(['id', 'senderId', 'senderName', 'recipientId', 'recipientName', 'amount', 'reference', 'createdAt'])
+          && (data.id is string && data.id.size() > 0 && data.id.size() <= 128)
+          && (data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128)
+          && (data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 200)
+          && (data.recipientId is string && data.recipientId.size() > 0 && data.recipientId.size() <= 128)
+          && (data.recipientName is string && data.recipientName.size() > 0 && data.recipientName.size() <= 200)
+          && (data.amount is number && data.amount > 0)
+          && (data.reference is string && data.reference.size() <= 500)
+          && (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number);
+      }
+
+      // Notification Schema Validation
+      // --- SERVICE CATEGORIES ---
+      match /service_categories/{categoryId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      // --- CATEGORY REQUESTS ---
+      match /category_requests/{requestId} {
+        allow read: if isAdmin();
+        allow create: if isAuthenticated() 
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() >= 2
+                      && request.resource.data.status == "pending";
+        allow update, delete: if isAdmin();
+      }
+
+      function isValidNotification(data) {
+        return data.keys().hasAll(['id', 'userId', 'title', 'message', 'type', 'isRead', 'createdAt'])
+          && (data.id is string && data.id.size() > 0 && data.id.size() <= 128)
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (data.title is string && data.title.size() > 0 && data.title.size() <= 200)
+          && (data.message is string && data.message.size() > 0 && data.message.size() <= 1000)
+          && (data.type is string && data.type.size() > 0 && data.type.size() <= 50)
+          && (data.isRead is bool)
+          && (!('actionUrl' in data) || (data.actionUrl is string && data.actionUrl.size() <= 2048))
+          && (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number)
+          && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number));
+      }
+
+      // Saved Items Schema Validation
+      function isValidSavedItem(data) {
+        return data.keys().hasAll(['userId', 'itemId', 'itemType'])
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (data.itemId is string && data.itemId.size() > 0 && data.itemId.size() <= 128)
+          && (data.itemType is string && (data.itemType == 'service' || data.itemType == 'product' || data.itemType == 'property' || data.itemType == 'doer'));
+      }
+
+      // Doer Availability Schema Validation
+      function isValidDoerAvailability(data) {
+        return data.keys().hasAll(['userId'])
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (!('days' in data) || (data.days is list && data.days.size() <= 7))
+          && (!('hours' in data) || (data.hours is list && data.hours.size() <= 48));
+      }
+
+      // Location Schema Validation & Spam Prevention
+      function isValidLocation(data) {
+        return data.keys().hasAll(['name'])
+          && data.name is string
+          && data.name.size() >= 2
+          && data.name.size() <= 120
+          && data.name.matches('.*[a-zA-Z].*') // Prevent punctuation/only-numbers spam, must contain letters
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number));
+      }
+
+      // Booking Schema Validation (Prevent self-booking loops)
+      function isValidBooking(data) {
+        return data.keys().hasAll(['bookingOwnerId', 'doerId', 'price', 'bookingId'])
+          && (data.bookingOwnerId is string && data.bookingOwnerId.size() > 0 && data.bookingOwnerId.size() <= 128)
+          && (data.doerId is string && data.doerId.size() > 0 && data.doerId.size() <= 128)
+          && (data.bookingOwnerId != data.doerId) // Self-booking protection
+          && (data.bookingId is string && data.bookingId.size() > 0 && data.bookingId.size() <= 128)
+          && (data.price is number && data.price >= 0)
+          && (!('paymentAmount' in data) || (data.paymentAmount is number && data.paymentAmount >= 0))
+          && (!('escrowAmount' in data) || (data.escrowAmount is number && data.escrowAmount >= 0))
+          && (!('platformFee' in data) || (data.platformFee is number && data.platformFee >= 0))
+          && (!('status' in data) || (data.status is string && data.status.size() <= 50))
+          && (!('notes' in data) || (data.notes is string && data.notes.size() <= 4000))
+          && (!('completionConfirmations' in data) || (data.completionConfirmations is map))
+          && (!('readReceipts' in data) || (data.readReceipts is map))
+          && (!('lastUpdated' in data) || (data.lastUpdated is string || data.lastUpdated is timestamp || data.lastUpdated is number))
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number));
+      }
+
+      // Conversation Schema Validation (Strict exactly-2-participants checking)
+      function isValidConversation(data) {
+        return data.keys().hasAll(['bookingOwnerId', 'doerId'])
+          && (data.bookingOwnerId is string && data.bookingOwnerId.size() > 0 && data.bookingOwnerId.size() <= 128)
+          && (data.doerId is string && data.doerId.size() > 0 && data.doerId.size() <= 128)
+          && (data.bookingOwnerId != data.doerId)
+          && (request.auth.uid == data.bookingOwnerId || request.auth.uid == data.doerId);
+      }
+
+      // Message Schema Validation
+      function isValidMessage(data) {
+        return data.keys().hasAll(['conversationId', 'senderId', 'receiverId', 'text'])
+          && (data.conversationId is string && data.conversationId.size() > 0 && data.conversationId.size() <= 128)
+          && (data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128)
+          && (data.receiverId is string && data.receiverId.size() > 0 && data.receiverId.size() <= 128)
+          && (data.senderId == 'system' || data.senderId != data.receiverId)
+          && (data.text is string && data.text.size() > 0 && data.text.size() <= 5000)
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number))
+          && (!('timestamp' in data) || (data.timestamp is string || data.timestamp is timestamp || data.timestamp is number))
+          && (!('typing' in data) || (data.typing is bool))
+          && (!('read' in data) || (data.read is bool));
+      }
+
+      // Verification Request Schema Validation
+      function isValidVerificationRequest(data) {
+        return data.keys().hasAll(['userId', 'status'])
+          && (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128)
+          && (data.status is string && data.status == 'pending')
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number));
+      }
+
+      // Report Schema Validation
+      function isValidReport(data) {
+        return data.keys().hasAll(['reporterId', 'reason'])
+          && (data.reporterId is string && data.reporterId.size() > 0 && data.reporterId.size() <= 128)
+          && (data.reason is string && data.reason.size() > 0 && data.reason.size() <= 2000)
+          && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number));
+      }
+
+      // Service Request Schema Validation
+      function isValidServiceRequest(data) {
+        return data.keys().hasAll(['id', 'title', 'description', 'price', 'bookingOwnerId', 'doerId', 'status', 'createdAt', 'updatedAt'])
+          && (data.id is string && data.id.size() > 0 && data.id.size() <= 128)
+          && (data.title is string && data.title.size() > 0 && data.title.size() <= 200)
+          && (data.description is string && data.description.size() > 0 && data.description.size() <= 5000)
+          && (data.price is number && data.price >= 0)
+          && (data.bookingOwnerId is string && data.bookingOwnerId.size() > 0 && data.bookingOwnerId.size() <= 128)
+          && (data.doerId is string && data.doerId.size() > 0 && data.doerId.size() <= 128)
+          && (data.status is string && data.status.size() > 0 && data.status.size() <= 50)
+          && (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number)
+          && (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number)
+          && (!('serviceId' in data) || data.serviceId == null || (data.serviceId is string && data.serviceId.size() <= 128))
+          && (!('productId' in data) || data.productId == null || (data.productId is string && data.productId.size() <= 128))
+          && (!('depositAmount' in data) || data.depositAmount is number)
+          && (!('bookingOwnerName' in data) || (data.bookingOwnerName is string && data.bookingOwnerName.size() <= 200))
+          && (!('doerName' in data) || (data.doerName is string && data.doerName.size() <= 200))
+          && (!('location' in data) || (data.location is string && data.location.size() <= 400))
+          && (!('disputeReason' in data) || (data.disputeReason is string && data.disputeReason.size() <= 2000))
+          && (!('isProductOrder' in data) || data.isProductOrder is bool);
+      }
+
+      // Enforce Booking State Machine Transitions
+      function isValidBookingTransition(currentStatus, nextStatus) {
+        return currentStatus == nextStatus
+          || (currentStatus == 'requested' && (nextStatus == 'accepted' || nextStatus == 'cancelled'))
+          || (currentStatus == 'pending' && (nextStatus == 'accepted' || nextStatus == 'cancelled'))
+          || (currentStatus == 'accepted' && (nextStatus == 'deposit_paid' || nextStatus == 'cancelled'))
+          || (currentStatus == 'deposit_paid' && (nextStatus == 'in_progress' || nextStatus == 'disputed' || nextStatus == 'cancelled'))
+          || (currentStatus == 'in_progress' && (nextStatus == 'awaiting_approval' || nextStatus == 'disputed' || nextStatus == 'cancelled'))
+          || (currentStatus == 'awaiting_approval' && (nextStatus == 'completed' || nextStatus == 'disputed' || nextStatus == 'cancelled'))
+          || (currentStatus == 'completed' && nextStatus == 'released')
+          || (currentStatus == 'disputed' && nextStatus == 'released');
+      }
+
+      // ==========================================
+      // --- Default Deny Catch-All ---
+      // ==========================================
+      match /{document=**} {
+        allow read, write: if false;
+      }
+
+      // ==========================================
+      // --- Collection Level Rulesets ---
+      // ==========================================
+
+      // Users: Owner can read, write with specific immutability constraints. Admin full access.
+      match /users/{userId} {
+        allow read: if isOwner(userId) || isAdmin();
+        
+        allow create: if isOwner(userId)
+                      && userId == request.auth.uid
+                      && request.resource.data.uid == request.auth.uid
+                      && isValidUser(request.resource.data)
+                      && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+                      && (!('trustScore' in request.resource.data) || request.resource.data.trustScore == 0)
+                      && (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus == 'unverified')
+                      && (!('verificationLevel' in request.resource.data) || request.resource.data.verificationLevel == 'none')
+                      && (!('averageRating' in request.resource.data) || request.resource.data.averageRating == 0)
+                      && (!('completedJobs' in request.resource.data) || request.resource.data.completedJobs == 0)
+                      && (!('walletBalance' in request.resource.data) || request.resource.data.walletBalance == 0)
+                      && (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0);
+                      
+        allow update: if (
+                        isOwner(userId)
+                        && isValidUser(request.resource.data)
+                        && (request.resource.data.uid == resource.data.uid || !('uid' in resource.data))
+                        && (request.resource.data.email == resource.data.email || !('email' in resource.data))
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'trustScore', 'verificationLevel', 'averageRating', 'completedJobs', 'walletBalance', 'totalEarnings'])
+                        && (
+                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationStatus']) ||
+                          (!('verificationStatus' in resource.data) && (request.resource.data.verificationStatus == 'unverified' || request.resource.data.verificationStatus == 'pending'))
+                        )
+                      ) || isAdmin();
+                      
+        allow delete: if isAdmin();
+      }
+
+      // Doer Profiles: Publicly viewable, only owner can modify (safeguarded against state exploitation)
+      match /doer_profiles/{profileId} {
+        allow read: if true;
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && profileId == request.auth.uid // Prevent profile hijack/spoofing
+                      && isValidDoerProfile(request.resource.data)
+                      && (!('trustScore' in request.resource.data) || request.resource.data.trustScore == 0 || request.resource.data.trustScore is map)
+                      && (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0)
+                      && (!('verificationLevel' in request.resource.data) || request.resource.data.verificationLevel == 'none')
+                      && (!('completedJobs' in request.resource.data) || request.resource.data.completedJobs == 0)
+                      && (!('averageRating' in request.resource.data) || request.resource.data.averageRating == 0)
+                      && (!('walletBalance' in request.resource.data) || request.resource.data.walletBalance == 0)
+                      && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+                      && (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus == 'unverified' || request.resource.data.verificationStatus == 'pending');
+                      
+        allow update: if (
+                        isResourceOwner()
+                        && profileId == request.auth.uid // Enforce identity parity
+                        && isValidDoerProfile(request.resource.data)
+                        && request.resource.data.userId == resource.data.userId // Immutable field
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'trustScore', 'verificationStatus', 'verificationLevel', 'averageRating', 'completedJobs', 'walletBalance', 'totalEarnings'])
+                      ) || isAdmin();
+                      
+        allow delete: if isAdmin();
+      }
+
+      // Services: Public read, owner modify with schema validation
+      match /services/{serviceId} {
+        allow read: if true;
+        
+        allow create: if (
+                        isAuthenticated()
+                        && request.auth.uid == request.resource.data.userId
+                        && isValidService(request.resource.data)
+                      ) || isAdmin();
+                      
+        allow update: if (
+                        isResourceOwner()
+                        && isValidService(request.resource.data)
+                        && (
+                          !('userId' in resource.data) ||
+                          request.resource.data.userId == resource.data.userId
+                        )
+                      ) || isAdmin();
+                      
+        allow delete: if isResourceOwner() || isAdmin();
+      }
+
+      // Products: Public read, owner modify with schema validation
+      match /products/{productId} {
+        allow read: if true;
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && isValidProduct(request.resource.data);
+                      
+        allow update: if (
+                        isResourceOwner()
+                        && isValidProduct(request.resource.data)
+                        && request.resource.data.userId == resource.data.userId // Immutable field
+                      ) || isAdmin();
+                      
+        allow delete: if isResourceOwner() || isAdmin();
+      }
+
+      // Portfolio Projects: Public read, owner modify with schema validation
+      match /portfolio_projects/{projectId} {
+        allow read: if true;
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && isValidPortfolioProject(request.resource.data);
+                      
+        allow update: if (
+                        isResourceOwner()
+                        && isValidPortfolioProject(request.resource.data)
+                        && request.resource.data.userId == resource.data.userId // Immutable field
+                      ) || isAdmin();
+                      
+        allow delete: if isResourceOwner() || isAdmin();
+      }
+
+      // Portfolio Images: Public read, owner modify with schema validation
+      match /portfolio_images/{imageId} {
+        allow read: if true;
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && isValidPortfolioImage(request.resource.data);
+                      
+        allow update: if (
+                        isResourceOwner()
+                        && isValidPortfolioImage(request.resource.data)
+                        && request.resource.data.userId == resource.data.userId // Immutable field
+                      ) || isAdmin();
+                      
+        allow delete: if isResourceOwner() || isAdmin();
+      }
+
+      // Reviews: Publicly viewable, owners can create/update.
+      match /reviews/{reviewId} {
+        allow read: if true;
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.authorId
+                      && request.auth.uid != request.resource.data.targetId // Prevent self-review
+                      && isValidReview(request.resource.data);
+                      
+        allow update: if isAuthenticated()
+                      && request.auth.uid == resource.data.authorId
+                      && isValidReview(request.resource.data)
+                      && request.resource.data.authorId == resource.data.authorId
+                      && request.resource.data.targetId == resource.data.targetId;
+                      
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+      }
+
+      // Wallets: Accessible to authenticated users in sandbox simulation
+      match /wallets/{walletId} {
+        allow read, write: if isAuthenticated();
+      }
+
+      // P2P Transfers: Sender or recipient can read/list, authenticated sender can create
+      match /p2p_transfers/{transferId} {
+        allow read: if isAdmin() || (isAuthenticated() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid));
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.senderId
+                      && isValidId(transferId)
+                      && isValidP2PTransfer(request.resource.data);
+                      
+        allow update, delete: if isAdmin(); // P2P transfers are immutable ledger entries
+      }
+
+      // Withdrawals: Users view and request their own pending withdrawals, admins process
+      match /withdrawals/{withdrawalId} {
+        allow read: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && isValidWithdrawal(request.resource.data);
+                      
+        allow update, delete: if isAdmin();
+      }
+
+      // Notifications: Strict single-user isolation. Read, mark-as-read, and delete own.
+      match /notifications/{notificationId} {
+        allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+        
+        allow create: if isAuthenticated() 
+                      && isValidNotification(request.resource.data);
+        
+        allow update: if isAuthenticated()
+                      && (request.auth.uid == resource.data.userId || isAdmin())
+                      && isValidNotification(request.resource.data)
+                      && request.resource.data.userId == resource.data.userId
+                      && request.resource.data.id == resource.data.id
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'updatedAt']);
+                      
+        allow delete: if (isAuthenticated() && request.auth.uid == resource.data.userId) || isAdmin();
+      }
+
+      // Saved Items: Authenticated user saves with validation and deterministic ID
+      match /saved_items/{savedItemId} {
+        allow read, delete: if isResourceOwner() || isAdmin();
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && savedItemId == request.resource.data.userId + '_' + request.resource.data.itemId // Prevent list bloating/poisoning
+                      && isValidSavedItem(request.resource.data);
+                      
+        allow update: if isResourceOwner()
+                      && savedItemId == resource.data.userId + '_' + resource.data.itemId
+                      && isValidSavedItem(request.resource.data)
+                      && request.resource.data.userId == resource.data.userId // Immutable field
+                      || isAdmin();
+      }
+
+      // Doer Availability: Public view, owner manages
+      match /doer_availability/{availabilityId} {
+        allow read: if true;
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && isValidDoerAvailability(request.resource.data);
+                      
+        allow update: if (
+                        isResourceOwner()
+                        && isValidDoerAvailability(request.resource.data)
+                        && request.resource.data.userId == resource.data.userId // Immutable field
+                      ) || isAdmin();
+                      
+        allow delete: if isResourceOwner() || isAdmin();
+      }
+
+      // Bookings: Locked down update pathways to only status/notes/receipts/confirmations.
+      // Enforces complete immutability of prices, financial amounts, platform fees, and UIDs.
+      match /bookings/{bookingId} {
+        allow read: if isAdmin() || (isAuthenticated() && isParticipant(resource.data.bookingOwnerId, resource.data.doerId));
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.bookingOwnerId
+                      && bookingId == request.resource.data.bookingId // Enforce document ID alignment
+                      && isValidBooking(request.resource.data);
+                      
+        allow update: if (
+                        (
+                          isAuthenticated()
+                          && isParticipant(resource.data.bookingOwnerId, resource.data.doerId)
+                          && !(resource.data.status in ['completed', 'cancelled', 'released']) // Terminal State Locking
+                          && isValidBookingTransition(resource.data.status, request.resource.data.status) // Enforce sequential booking transitions
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'notes', 'completionConfirmations', 'readReceipts', 'lastUpdated'])
+                          && request.resource.data.bookingOwnerId == resource.data.bookingOwnerId // Immutable field
+                          && request.resource.data.doerId == resource.data.doerId // Immutable field
+                          && request.resource.data.bookingId == resource.data.bookingId // Immutable field
+                          && (!('price' in request.resource.data) || request.resource.data.price == resource.data.price) // Immutable field
+                          && (!('paymentAmount' in request.resource.data) || request.resource.data.paymentAmount == resource.data.paymentAmount) // Immutable field
+                          && (!('escrowAmount' in request.resource.data) || request.resource.data.escrowAmount == resource.data.escrowAmount) // Immutable field
+                          && (!('platformFee' in request.resource.data) || request.resource.data.platformFee == resource.data.platformFee) // Immutable field
+                          // Secure State Transition: Booking owner must authorize fund completion (status == 'completed' or 'released')
+                          && (
+                            request.resource.data.status == resource.data.status || 
+                            (request.resource.data.status != 'completed' && request.resource.data.status != 'released') || 
+                            request.auth.uid == resource.data.bookingOwnerId
+                          )
+                        )
+                        || isAdmin()
+                      ) && isValidBooking(request.resource.data);
+                      
+        allow delete: if isAdmin();
+      }
+
+      // Conversations: Accessed and created by matched participants only (exactly 2: bookingOwnerId and doerId)
+      match /conversations/{conversationId} {
+        allow read: if isAdmin() || (isAuthenticated() && (request.auth.uid == resource.data.bookingOwnerId || request.auth.uid == resource.data.doerId));
+        
+        allow create: if isAuthenticated() && isValidConversation(request.resource.data);
+        
+        // Enforce immutability of bookingOwnerId, doerId, and createdAt fields on update to prevent hijacking
+        allow update: if (
+                        isAdmin() || 
+                        (
+                          isAuthenticated() 
+                          && (request.auth.uid == resource.data.bookingOwnerId || request.auth.uid == resource.data.doerId)
+                          && request.resource.data.bookingOwnerId == resource.data.bookingOwnerId
+                          && request.resource.data.doerId == resource.data.doerId
+                          && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+                        )
+                      );
+        
+        allow delete: if isAdmin();
+      }
+
+      // Messages: Strict conversation existence check and sender authorization verification
+      match /messages/{messageId} {
+        allow get, list: if isAdmin() || isAuthenticated();
+        
+        allow create: if isAuthenticated()
+                      && (
+                        request.auth.uid == request.resource.data.senderId ||
+                        request.resource.data.senderId == 'system' ||
+                        request.resource.data.senderId.startsWith('doer-') ||
+                        request.resource.data.senderId.startsWith('user-')
+                      )
+                      && isValidMessage(request.resource.data)
+                      && (
+                        !exists(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)) ||
+                        request.auth.uid == get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.bookingOwnerId ||
+                        request.auth.uid == get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.doerId
+                      );
+                      
+        allow update: if isAdmin() || (
+          isAuthenticated() && (
+            (request.auth.uid == resource.data.senderId && isValidMessage(request.resource.data)) ||
+            (request.auth.uid == resource.data.receiverId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']))
+          )
+        );
+        allow delete: if isAdmin() || (
+          isAuthenticated() && 
+          (resource == null || request.auth.uid == resource.data.senderId)
+        );
+      }
+
+      // Locations: Public lookup, verified creation, admin modifications
+      match /locations/{locationId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && isValidLocation(request.resource.data);
+        allow update: if isAdmin() || (isAuthenticated() && isValidLocation(request.resource.data));
+        allow delete: if isAdmin();
+      }
+
+      // Escrow Transactions: Read own transactions, admin managed, client-locked writes
+      match /escrow_transactions/{transactionId} {
+        allow read: if isAdmin() || (isAuthenticated() && (
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == resource.data.bookingOwnerId ||
+          request.auth.uid == resource.data.doerId ||
+          request.auth.uid == resource.data.providerId
+        ));
+        allow create, update, delete: if isAdmin(); // System/Admin managed only
+      }
+
+      // Payment Intents: Strictly read by owner and admin, clients cannot write
+      match /payment_intents/{intentId} {
+        allow read: if isAdmin() || (isAuthenticated() && (
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == resource.data.bookingOwnerId
+        ));
+        allow create, update, delete: if isAdmin(); // Managed only by backend hooks
+      }
+
+      // Verification Requests: Initial state locked to 'pending', admins review. Request ID tied to user UID to prevent duplicates/spam.
+      match /verification_requests/{requestId} {
+        allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+        
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.userId
+                      && requestId == request.auth.uid // Enforce unique pending request per user
+                      && isValidVerificationRequest(request.resource.data);
+                      
+        allow update, delete: if isAdmin();
+      }
+
+      // Reports: Submitted by verified users, read own reports, read/managed by admins
+      match /reports/{reportId} {
+        allow read: if isAdmin() || (isAuthenticated() && resource.data.reporterId == request.auth.uid);
+        allow create: if isAuthenticated()
+                      && request.auth.uid == request.resource.data.reporterId
+                      && isValidReport(request.resource.data);
+        allow update, delete: if isAdmin();
+      }
+
+      // Audit Logs: Strictly locked to system/admin
+      match /audit_logs/{logId} {
+        allow read, write: if isAdmin();
+      }
+
+      // Settings: Publicly read by client components, writable only by admin
+      match /settings/{settingId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      // Platform Settings: Publicly read by client components, writable only by admin
+      match /platform_settings/{docId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      // Service Fees: Publicly read by client components, writable only by admin
+      match /service_fees/{feeId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      // Service Fee History: Read by admin, writable by admin
+      match /service_fee_history/{historyId} {
+        allow read: if isAdmin();
+        allow write: if isAdmin();
+      }
+
+      // Refund Transactions: Restricted to admin-only access
+      match /refund_transactions/{transactionId} {
+        allow read, write: if isAdmin();
+      }
+
+      // Marketplace Statistics: Locked to Admin-only for sensitive financial totals (Revenue, Escrow, Commissions)
+      match /marketplace_statistics/{statId} {
+        allow read, write: if isAdmin();
+      }
+
+      // Commission Transactions: Read own, Admin write/full access
+      match /commission_transactions/{transactionId} {
+        allow read: if isAdmin() || (isAuthenticated() && (
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == resource.data.bookingOwnerId ||
+          request.auth.uid == resource.data.doerId
+        ));
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Booking Conflicts: Read by participants and Admin, Admin managed
+      match /booking_conflicts/{conflictId} {
+        allow read: if isAdmin() || (isAuthenticated() && (
+          request.auth.uid == resource.data.bookingOwnerId ||
+          request.auth.uid == resource.data.doerId
+        ));
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Service Requests: Private service requests with least privilege checks
+      match /service_requests/{requestId} {
+        allow read: if isAdmin() || (isAuthenticated() && (
+          resource.data.bookingOwnerId == request.auth.uid ||
+          resource.data.doerId == request.auth.uid
+        ));
+        allow create: if isAuthenticated() 
+                      && request.auth.uid == request.resource.data.bookingOwnerId
+                      && isValidServiceRequest(request.resource.data);
+        allow update: if isAuthenticated() 
+                      && (
+                        resource.data.bookingOwnerId == request.auth.uid ||
+                        resource.data.doerId == request.auth.uid
+                      )
+                      && isValidServiceRequest(request.resource.data)
+                      && request.resource.data.bookingOwnerId == resource.data.bookingOwnerId
+                      && request.resource.data.doerId == resource.data.doerId;
+        allow delete: if isAdmin() || (
+                        isAuthenticated() 
+                        && resource.data.bookingOwnerId == request.auth.uid
+                      );
+      }
+
+      // User Devices: Authenticated user registers and reads their own devices
+      match /user_devices/{deviceId} {
+        allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+        allow create, update: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+        allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      }
+
+      // Dashboard Metrics: Restricted to admin-only access for sensitive financial totals
+      match /dashboard_metrics/{metricId} {
+        allow read, write: if isAdmin();
+      }
+
+      // Daily Statistics: Restricted to admin-only access for sensitive financial metrics
+      match /daily_statistics/{statId} {
+        allow read, write: if isAdmin();
+      }
+
+      // Admin Logs: Full admin-only lock
+      match /admin_logs/{logId} {
+        allow read, write: if isAdmin();
+      }
+
+
+
+      // User Verification Schema Validation
+      function isValidUserVerification(data) {
+        return data.keys().hasAll(['uid', 'status'])
+          && (data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128)
+          && (data.status is string && data.status.size() > 0 && data.status.size() <= 50)
+          && (!('type' in data) || (data.type is string))
+          && (!('files' in data) || (data.files is list))
+          && (!('submittedAt' in data) || (data.submittedAt is string || data.submittedAt is timestamp || data.submittedAt is number));
+      }
+
+      // Portfolio Projects: Publicly viewable, owners can create/update.
+      match /portfolio_projects/{projectId} {
+        allow read: if true;
+        allow create: if isAuthenticated() 
+                      && (request.auth.uid == request.resource.data.userId || isAdmin())
+                      && isValidPortfolioProject(request.resource.data);
+        allow update: if (isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin()))
+                      && isValidPortfolioProject(request.resource.data)
+                      && request.resource.data.userId == resource.data.userId;
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      }
+
+      // Portfolio Images: Publicly viewable, owners of project can create/update.
+      match /portfolio_images/{imageId} {
+        allow read: if true;
+        allow create: if isAuthenticated() 
+                      && (exists(/databases/$(database)/documents/portfolio_projects/$(request.resource.data.projectId))
+                         && get(/databases/$(database)/documents/portfolio_projects/$(request.resource.data.projectId)).data.userId == request.auth.uid)
+                      || isAdmin();
+        allow update: if (isAuthenticated() && (exists(/databases/$(database)/documents/portfolio_projects/$(resource.data.projectId))
+                         && get(/databases/$(database)/documents/portfolio_projects/$(resource.data.projectId)).data.userId == request.auth.uid)
+                         || isAdmin())
+                      && isValidPortfolioImage(request.resource.data)
+                      && request.resource.data.projectId == resource.data.projectId;
+        allow delete: if isAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/portfolio_projects/$(resource.data.projectId))
+                         && get(/databases/$(database)/documents/portfolio_projects/$(resource.data.projectId)).data.userId == request.auth.uid);
+      }
+
+      match /user_verifications/{uid} {
+        allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == uid);
+        allow write: if isAuthenticated() 
+                      && request.auth.uid == uid 
+                      && request.resource.data.uid == uid
+                      && isValidUserVerification(request.resource.data);
+      }
+    }
+  }

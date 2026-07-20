@@ -1,0 +1,6 @@
+{
+  "name": "VayaStay",
+  "description": "A clean, minimal, visually stunning service-on-demand marketplace with dual-release escrow and smart South African resilience built in.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
