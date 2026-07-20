@@ -53,6 +53,7 @@ export interface User {
   updatedAt: string;
   locationId?: string;
   locationName?: string;
+  role: UserRoleType;
 }
 
 export interface DoerProfile {

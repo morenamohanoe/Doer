@@ -39,16 +39,6 @@ import {
   CategoryRequest,
   FailedPayment
 } from '../types';
-import {
-  SEED_DOERS,
-  SERVICE_CATEGORIES,
-  INITIAL_SERVICES,
-  INITIAL_PRODUCTS,
-  SEED_REVIEWS,
-  SOUTH_AFRICAN_LOCATIONS,
-  SEED_PORTFOLIO_PROJECTS,
-  SEED_PORTFOLIO_IMAGES
-} from '../lib/mockData';
 
 interface AppContextProps {
   isOnboarded: boolean;
@@ -130,7 +120,6 @@ interface AppContextProps {
   clearNotification: (id: string) => void;
   clearAllNotifications: () => void;
   deleteConversation: (conversationId: string) => void;
-  resetAllData: () => void;
   triggerSound: (type: 'click' | 'success' | 'notification' | 'cash') => void;
   triggerVibration: (pattern: number | number[]) => void;
   showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error', duration?: number) => void;
@@ -250,7 +239,7 @@ const playSynthSound = (type: 'click' | 'success' | 'notification' | 'cash') => 
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { profile, profileLoading } = useAuth(); // Get from AuthContext
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -290,7 +279,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (stored) return JSON.parse(stored);
     return {
       id: 'current-user-uuid',
-      email: 'morenamohanoe@gmail.com',
+      email: '',
       phoneNumber: '',
       firstName: '',
       lastName: '',
@@ -350,7 +339,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         trustScore: { score: 10, verificationScore: 10, reputationScore: 0, reliabilityScore: 0, activityScore: 0, level: 'New User' }
       }
     ];
-    return [...myProfiles, ...SEED_DOERS];
+    return [...myProfiles, ];
   });
   const [roleProgressions, setRoleProgressions] = useState<RoleProgression[]>(() => {
     const stored = localStorage.getItem('doer_progressions');
@@ -377,7 +366,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const q = firestore.query(firestore.collection(db, 'services'));
     const unsubscribe = firestore.onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
-        setServices([]);
+        setServiceCategories([]);
       } else {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service));
         setServices(data);
@@ -759,7 +748,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>(() => {
     const stored = localStorage.getItem('doer_products');
     if (stored) return JSON.parse(stored);
-    return INITIAL_PRODUCTS;
+    return [];
   });
 
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>(() => {
@@ -883,35 +872,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const q = firestore.query(firestore.collection(db, 'service_categories'));
     const unsubscribe = firestore.onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
-        const isUserAdmin = user?.email === 'morenamohanoe@gmail.com';
-        if (isUserAdmin) {
-          // Automatically migrate existing hardcoded categories into Firestore
-          SERVICE_CATEGORIES.forEach(async (cat) => {
-            try {
-              await firestore.setDoc(firestore.doc(db, 'service_categories', cat.id), {
-                name: cat.name,
-                name_lowercase: cat.name.toLowerCase(),
-                icon: cat.icon || 'Sparkles',
-                color: cat.color || 'from-blue-500 to-indigo-600',
-                description: cat.description || '',
-                status: 'approved',
-                createdBy: 'system',
-                displayOrder: 0,
-                createdAt: firestore.serverTimestamp()
-              });
-            } catch (err) {
-              console.error('Failed to auto-migrate category:', cat.id, err);
-            }
-          });
-        }
-        
-        // Use fallbacks immediately during the writing phase
-        setServiceCategories(SERVICE_CATEGORIES.map(c => ({
-          ...c,
-          status: 'approved',
-          createdBy: 'system',
-          createdAt: new Date().toISOString()
-        })) as ServiceCategory[]);
+        setServiceCategories([]);
       } else {
         const data = snapshot.docs.map(doc => ({ 
           id: doc.id, 
@@ -933,7 +894,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    const isUserAdmin = user?.email === 'morenamohanoe@gmail.com';
+    const isUserAdmin = currentUser?.role === 'admin';
     if (!isUserAdmin) {
       setCategoryRequests([]);
       return;
@@ -1730,7 +1691,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       // Resolve avatar
       const prof = roleProfiles.find(p => p.id === srv.doerId);
-      doerAvatar = prof ? SEED_DOERS.find(d => d.id === srv.doerId)?.hourlyRate ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&fit=crop&q=80' : srv.doerAvatar : srv.doerAvatar;
+      doerAvatar = srv.doerAvatar;
     } else {
       const prd = products.find((p) => p.id === entityId);
       if (!prd) return;
@@ -3029,96 +2990,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resetAllData = () => {
-    localStorage.clear();
-    setIsOnboarded(false);
-    setOnboardingStep(1);
-    setCurrentUser({
-      id: 'current-user-uuid',
-      email: 'morenamohanoe@gmail.com',
-      phoneNumber: '',
-      firstName: '',
-      lastName: '',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&fit=crop&q=80',
-      verificationStatus: 'unverified',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-    setCurrentRoles([
-      {
-        id: 'role-doer-1',
-        userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-        role: 'doer',
-        isActive: true,
-        isPrimary: true,
-        activatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      }
-    ]);
-    setActiveRole('doer');
-    setServices(INITIAL_SERVICES);
-    setProducts(INITIAL_PRODUCTS);
-    setServiceRequests([]);
-    setEscrowTransactions([]);
-    setConversations([]);
-    setMessages([]);
-    setReviews(SEED_REVIEWS);
-    setPortfolioProjects(SEED_PORTFOLIO_PROJECTS);
-    setPortfolioImages(SEED_PORTFOLIO_IMAGES);
-    setWallet({
-      id: 'wallet-uuid',
-      userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-      balance: 0,
-      escrowBalance: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-    setWithdrawals([]);
-    setVerificationRequests([]);
-    
-    // Add default profiles
-    const myProfiles: RoleProfile[] = [
-      {
-        id: 'my-doer-profile',
-        userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-        role: 'doer',
-        title: 'Freelance Professional',
-        bio: 'Ready to offer outstanding local services and help people get things done!',
-        hourlyRate: 150,
-        rating: 0,
-        reviewCount: 0,
-        completedJobsCount: 0,
-        salesCount: 0,
-        completionRate: 100,
-        location: 'Sandton, Johannesburg',
-        skills: [],
-        bannerColor: 'from-blue-500 to-teal-500',
-        trustScore: { score: 10, verificationScore: 10, reputationScore: 0, reliabilityScore: 0, activityScore: 0, level: 'New User' }
-      }
-    ];
-
-    setRoleProfiles([...myProfiles, ...SEED_DOERS]);
-
-    setNotifications([
-      {
-        id: 'notif-welcome',
-        userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-        title: 'Welcome to DOER! 🇿🇦',
-        body: 'Unlock economic opportunities or find the absolute best local help in South Africa today.',
-        priority: 'MEDIUM',
-        isRead: false,
-        createdAt: new Date().toISOString()
-      }
-    ]);
-  };
 
   const addPortfolioProject = async (
     title: string,
@@ -3266,8 +3137,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(checkInterval);
   }, [serviceRequests, currentUser]);
 
-  const isAdmin = currentUser?.email === 'morenamohanoe@gmail.com';
-
   return (
     <AppContext.Provider
       value={{
@@ -3327,7 +3196,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         clearNotification,
         clearAllNotifications,
         deleteConversation,
-        resetAllData,
         triggerSound,
         triggerVibration,
         showToast,

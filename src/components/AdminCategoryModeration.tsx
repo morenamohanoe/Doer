@@ -48,9 +48,7 @@ const PRESET_GRADIENTS = [
 ];
 
 export default function AdminCategoryModeration() {
-  const { serviceCategories, categoryRequests, triggerSound, showToast, currentUser } = useApp();
-  
-  const [activeTab, setActiveTab] = useState<'manage' | 'requests' | 'fees'>('manage');
+  const { serviceCategories, categoryRequests, triggerSound, showToast, currentUser, isAdmin } = useApp();
   
   // Search and Filter State
   const [search, setSearch] = useState('');
@@ -85,6 +83,18 @@ export default function AdminCategoryModeration() {
     onConfirm: () => {},
   });
 
+  const [activeTab, setActiveTab] = useState<'manage' | 'requests' | 'fees'>('manage');
+  
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center p-6 text-center">
+        <Shield className="w-12 h-12 text-slate-300 mb-4" />
+        <h2 className="text-lg font-black text-slate-800">Access Denied</h2>
+        <p className="text-xs text-slate-500 font-medium mt-1">You do not have permission to access the Category Command Center.</p>
+      </div>
+    );
+  }
+  
   // Manage Category Filtering
   const filteredCategories = serviceCategories.filter(cat => {
     const matchesSearch = cat.name.toLowerCase().includes(search.toLowerCase()) || 

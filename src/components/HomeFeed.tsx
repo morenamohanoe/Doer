@@ -7,7 +7,6 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { MediaPreview } from './MediaPreview';
-import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import {
   Search,
   MapPin,
@@ -324,21 +323,7 @@ export default function HomeFeed() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [focusedDoerId, setFocusedDoerId] = useState<string | null>(null);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-
-  useEffect(() => {
-    if (showMap && !userLocation) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => {
-            // Silently fallback to default location
-          }
-        );
-      }
-    }
-  }, [showMap, userLocation]);
+  //
 
   const handleShare = (title: string, text: string) => {
     if (navigator.share) {
@@ -532,19 +517,6 @@ export default function HomeFeed() {
             <button
               onClick={() => {
                 triggerSound('click');
-                setShowMap(!showMap);
-              }}
-              className={`px-4 py-3.5 rounded-2xl border flex items-center justify-center gap-2 transition-all text-xs font-black uppercase tracking-wider ${
-                showMap
-                  ? 'bg-neutral-900 text-white border-neutral-900'
-                  : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
-              }`}
-            >
-              <MapPin className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                triggerSound('click');
                 setShowFilters(!showFilters);
               }}
               className={`px-5 py-3.5 rounded-2xl border flex items-center justify-center gap-2 transition-all text-xs font-black uppercase tracking-wider ${
@@ -559,60 +531,6 @@ export default function HomeFeed() {
           </div>
         </div>
 
-        {/* Map View Section */}
-        <AnimatePresence>
-          {showMap && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="px-4 pb-4 overflow-hidden"
-            >
-              <div className="w-full h-72 rounded-2xl overflow-hidden border border-neutral-200 shadow-sm relative bg-neutral-100 flex flex-col items-center justify-center">
-                {!(import.meta.env.VITE_GOOGLE_MAPS_API_KEY || (process.env as any).GOOGLE_MAPS_PLATFORM_KEY) ? (
-                  <div className="p-6 text-center flex flex-col items-center">
-                    <MapPin className="w-8 h-8 text-neutral-400 mb-3" />
-                    <p className="text-sm font-medium text-neutral-600 mb-1">Google Maps API Key Required</p>
-                    <p className="text-xs text-neutral-500 max-w-xs">Please add GOOGLE_MAPS_PLATFORM_KEY in settings to enable map view.</p>
-                  </div>
-                ) : (
-                <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || (process.env as any).GOOGLE_MAPS_PLATFORM_KEY || ''}>
-                  <GoogleMap 
-                    defaultCenter={userLocation || {lat: -26.2041, lng: 28.0473}} 
-                    defaultZoom={12}
-                    mapId="homefeed-map-id"
-                    gestureHandling="greedy"
-                    disableDefaultUI={true}
-                  >
-                    {filteredServices.map(srv => {
-                      // Generate somewhat random offsets for demonstration if they have the same location string
-                      // In a real app, they would have actual lat/lng
-                      const latOffset = (Math.random() - 0.5) * 0.1;
-                      const lngOffset = (Math.random() - 0.5) * 0.1;
-                      const baseLat = userLocation?.lat || -26.2041;
-                      const baseLng = userLocation?.lng || 28.0473;
-                      
-                      return (
-                        <AdvancedMarker 
-                          key={srv.id} 
-                          position={{ lat: baseLat + latOffset, lng: baseLng + lngOffset }}
-                          onClick={() => {
-                            triggerSound('click');
-                            setSelectedService(srv);
-                            setIsServiceModalOpen(true);
-                          }}
-                        >
-                          <Pin background={'#000000'} borderColor={'#ffffff'} glyphColor={'#ffffff'} />
-                        </AdvancedMarker>
-                      );
-                    })}
-                  </GoogleMap>
-                </APIProvider>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Advanced Filters Section */}
         <AnimatePresence>

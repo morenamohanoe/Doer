@@ -595,16 +595,7 @@ export default function PostServiceModal({ isOpen, onClose, editingService }: Po
                         className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:outline-none text-xs font-semibold"
                       />
                       
-                      {/* Upload device button */}
-                      <label className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer relative shrink-0" title="Upload from Device">
-                        <Upload className="w-4 h-4" />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, idx)}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                      </label>
+                      
 
                       {imgUrl.startsWith('data:') && (
                         <button

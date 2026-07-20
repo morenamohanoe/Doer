@@ -42,52 +42,6 @@ export default function Onboarding() {
   const [isProcessingCover, setIsProcessingCover] = useState(false);
   const [isProcessingPortfolio, setIsProcessingPortfolio] = useState(false);
 
-  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsProcessingCover(true);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFields(prev => ({ ...prev, coverImageUrl: reader.result as string }));
-        setTimeout(() => setIsProcessingCover(false), 800);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handlePortfolioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      setIsProcessingPortfolio(true);
-      const newImages: string[] = [];
-      let processedCount = 0;
-
-      Array.from(files).forEach((file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          newImages.push(reader.result as string);
-          processedCount++;
-          if (processedCount === files.length) {
-            setFields(prev => ({ 
-              ...prev, 
-              portfolioImages: [...prev.portfolioImages, ...newImages] 
-            }));
-            setIsProcessingPortfolio(false);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-  };
-
-  const removePortfolioImage = (index: number) => {
-    setFields(prev => {
-      const currentImages = [...prev.portfolioImages];
-      currentImages.splice(index, 1);
-      return { ...prev, portfolioImages: currentImages };
-    });
-  };
-
   // Populate state from current user / profile once loaded
   useEffect(() => {
     if (profile) {
@@ -405,30 +359,17 @@ export default function Onboarding() {
               </h3>
               
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Account Cover Banner *</label>
-                  <label className="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors bg-slate-50/50 overflow-hidden group">
-                    {fields.coverImageUrl ? (
-                      <img src={fields.coverImageUrl} className="absolute inset-0 w-full h-full object-cover" alt="Cover" />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-5">
-                        <User className="w-8 h-8 text-slate-300 mb-2" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tap to upload cover</span>
-                      </div>
-                    )}
-                    
-                    {isProcessingCover && (
-                      <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm flex items-center justify-center z-10">
-                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
-                    
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                    <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
-                  </label>
+                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Cover Image URL (Optional)</span>
+                  <input
+                    type="text"
+                    name="coverImageUrl"
+                    placeholder="https://... cover link"
+                    value={fields.coverImageUrl || ""}
+                    onChange={(e) => setFields({ ...fields, coverImageUrl: e.target.value })}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-zinc-900"
+                  />
                   <p className="text-[8px] text-slate-400 italic mt-1 font-bold">Recommended size: 1200 x 400px</p>
                 </div>
-
                 {/* Profile Avatar Display (Read-only since it was uploaded in registration) */}
                 <div className="flex items-center gap-4 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
                   <div className="w-12 h-12 rounded-full border-2 border-white overflow-hidden shadow-sm bg-white shrink-0">
@@ -440,38 +381,19 @@ export default function Onboarding() {
                   </div>
                 </div>
               </div>
-            </div>
 
             <div className="space-y-3 pt-2 border-t border-slate-50">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Portfolio Images</label>
-                  
-                  <div className="grid grid-cols-4 gap-2">
-                    {fields.portfolioImages.map((url, idx) => (
-                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
-                        <img src={url} className="w-full h-full object-cover" alt={`Portfolio ${idx}`} />
-                        <button 
-                          onClick={() => removePortfolioImage(idx)}
-                          className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    ))}
-                    
-                    <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors bg-white relative">
-                      {isProcessingPortfolio ? (
-                        <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <Plus className="w-5 h-5 text-slate-300" />
-                          <span className="text-[7px] font-bold text-slate-400 uppercase mt-1">Add Work</span>
-                        </>
-                      )}
-                      <input type="file" accept="image/*" multiple onChange={handlePortfolioUpload} className="hidden" />
-                    </label>
-                  </div>
-                  <p className="text-[8px] text-slate-400 font-bold">Upload photos of your completed projects or tools.</p>
+                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Portfolio Gallery URLs</span>
+                  <p className="text-[8px] text-slate-400 font-bold mb-2">Paste image URLs separated by commas</p>
+                  <textarea
+                    name="portfolioImages"
+                    rows={2}
+                    value={fields.portfolioImages ? fields.portfolioImages.join(', ') : ''}
+                    onChange={(e) => setFields({ ...fields, portfolioImages: e.target.value.split(',').map(u => u.trim()).filter(Boolean) })}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-zinc-900"
+                    placeholder="https://img1.jpg, https://img2.jpg..."
+                  />
                 </div>
 
                 <div className="space-y-1">

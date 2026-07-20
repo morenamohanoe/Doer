@@ -42,12 +42,10 @@ import {
 import DoerProfileModal from './DoerProfileModal';
 import PullToRefresh from './PullToRefresh';
 import PostServiceModal from './PostServiceModal';
-import { uploadCroppedImage, deleteImage } from '../lib/storage';
 import { signOut } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import PortfolioGalleryWithLightbox from './PortfolioGalleryWithLightbox';
-import ImageCropperModal from './ImageCropperModal';
 import VerificationDetailsModal from './VerificationDetailsModal';
 import DynamicPricingCalculator from './DynamicPricingCalculator';
 import ProfileQRCodeModal from './ProfileQRCodeModal';
@@ -283,29 +281,6 @@ export default function ProfileScreen() {
     skills: profile?.skills?.join(', ') || '',
   });
 
-  const handleProfileImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCropModalData({ isOpen: true, imageSrc: reader.result as string, type: 'profile', aspectRatio: 1 });
-      };
-      reader.readAsDataURL(file);
-    }
-    e.target.value = '';
-  };
-
-  const handleCoverImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCropModalData({ isOpen: true, imageSrc: reader.result as string, type: 'cover', aspectRatio: 21 / 9 });
-      };
-      reader.readAsDataURL(file);
-    }
-    e.target.value = '';
-  };
 
   const [editUseCustomCoverUrl, setEditUseCustomCoverUrl] = useState(!!profile?.coverImageUrl);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -387,17 +362,13 @@ export default function ProfileScreen() {
 
       if (editFields.customProfileUrl.startsWith('data:image/')) {
         const oldUrl = currentUser.avatarUrl;
-        avatarUrl = await uploadCroppedImage(editFields.customProfileUrl, `users/${currentUser.uid}/avatar_${Date.now()}`);
         if (oldUrl && oldUrl.includes('firebasestorage.googleapis.com')) {
-          await deleteImage(oldUrl);
         }
       }
 
       if (editUseCustomCoverUrl && editFields.customCoverUrl.startsWith('data:image/')) {
         const oldUrl = profile?.coverImageUrl;
-        coverImageUrl = await uploadCroppedImage(editFields.customCoverUrl, `users/${currentUser.uid}/cover_${Date.now()}`);
         if (oldUrl && oldUrl.includes('firebasestorage.googleapis.com')) {
-          await deleteImage(oldUrl);
         }
       }
 
@@ -526,13 +497,7 @@ export default function ProfileScreen() {
               Standard Banner Active
             </div>
           )}
-          {isEditing && (
-            <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-              <Camera className="w-6 h-6 text-white mb-1" />
-              <span className="text-white text-[10px] font-black uppercase tracking-wider">Change Cover</span>
-              <input type="file" accept="image/*" className="hidden" onChange={handleCoverImageUpload} />
-            </label>
-          )}
+          
         </div>
 
         <div className="p-5">
@@ -540,12 +505,7 @@ export default function ProfileScreen() {
             <div className="relative group">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-md bg-white relative">
                 <img onClick={() => !isEditing && setViewingImage(currentUser.avatarUrl)} src={currentUser.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${!isEditing ? 'cursor-pointer' : ''}`} />
-                {isEditing && (
-                  <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-20">
-                    <Camera className="w-5 h-5 text-white" />
-                    <input type="file" accept="image/*" className="hidden" onChange={handleProfileImageUpload} />
-                  </label>
-                )}
+                
               </div>
             </div>
             <div className="pt-3">
@@ -765,61 +725,49 @@ export default function ProfileScreen() {
                    </div>
                  </div>
 
-                {/* Media Upload Buttons */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* Media URL Inputs */}
+                <div className="space-y-3 pt-2">
                   <div className="space-y-1.5">
                     <span className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Profile Image
+                      Profile Image URL
                     </span>
-                    <label className="block w-full cursor-pointer bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors rounded-lg p-2 text-center">
-                      <span className="text-[10px] font-bold text-slate-700 block">Upload</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleProfileImageUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                  <div className="space-y-1.5">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Cover Image
-                    </span>
-                    <label className="block w-full cursor-pointer bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors rounded-lg p-2 text-center">
-                      <span className="text-[10px] font-bold text-slate-700 block">Upload</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverImageUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* Custom Cover URL input toggle */}
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editUseCustomCoverUrl}
-                      onChange={(e) => setEditUseCustomCoverUrl(e.target.checked)}
-                      className="w-3.5 h-3.5 text-brand rounded border-slate-300 focus:ring-brand"
-                    />
-                    <span className="text-[11px] font-bold text-slate-700">Use Custom Cover Link Instead</span>
-                  </label>
-                  {editUseCustomCoverUrl && (
                     <input
                       type="text"
-                      name="customCoverUrl"
-                      placeholder="https://images.unsplash.com/... cover link"
-                      value={editFields.customCoverUrl}
+                      name="customProfileUrl"
+                      placeholder="https://images.unsplash.com/... profile link"
+                      value={editFields.customProfileUrl}
                       onChange={handleEditChange}
                       className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none"
                     />
-                  )}
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                      Cover Image URL
+                    </span>
+                    <div className="flex items-center gap-1.5 mb-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editUseCustomCoverUrl}
+                        onChange={(e) => setEditUseCustomCoverUrl(e.target.checked)}
+                        className="w-3.5 h-3.5 text-brand rounded border-slate-300 focus:ring-brand"
+                      />
+                      <span className="text-[10px] font-bold text-slate-700">Enable Custom Cover</span>
+                    </div>
+                    {editUseCustomCoverUrl && (
+                      <input
+                        type="text"
+                        name="customCoverUrl"
+                        placeholder="https://images.unsplash.com/... cover link"
+                        value={editFields.customCoverUrl}
+                        onChange={handleEditChange}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none"
+                      />
+                    )}
+                  </div>
                 </div>
 
+                {/* Account details edits */}
                 {/* Account details edits */}
                 <div className="space-y-3 pt-3 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -1720,26 +1668,6 @@ export default function ProfileScreen() {
         </button>
       </motion.div>
 
-      {/* ⚠️ DEVELOPER CONTROLS BOX */}
-      <motion.div
-        className="bg-slate-100 p-4 geom-card border border-slate-200 text-center hover:shadow-lg transition-all duration-300"
-        whileHover={{
-          scale: 1.02
-        }}>
-        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Sandbox Controls</span>
-        <p className="text-[10px] text-slate-500 font-semibold mt-1">
-          Wipe the database back to clean default seeds to demonstrate the onboarding wizard from scratch.
-        </p>
-        <button
-          onClick={() => {
-            triggerSound('success');
-            resetAllData();
-          }}
-          className="mt-3 w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition-all"
-        >
-          <RefreshCw className="w-3.5 h-3.5" /> Wipe Cache & Reset App
-        </button>
-      </motion.div>
 
         </div>
       </PullToRefresh>
@@ -1776,20 +1704,6 @@ export default function ProfileScreen() {
         />
       )}
       {/* Modals */}
-      <ImageCropperModal
-        isOpen={cropModalData.isOpen}
-        imageSrc={cropModalData.imageSrc}
-        aspectRatio={cropModalData.aspectRatio}
-        onClose={() => setCropModalData(prev => ({ ...prev, isOpen: false }))}
-        onCropComplete={(croppedImageUrl) => {
-          if (cropModalData.type === 'profile') {
-            setEditFields(prev => ({ ...prev, customProfileUrl: croppedImageUrl }));
-          } else {
-            setEditFields(prev => ({ ...prev, customCoverUrl: croppedImageUrl }));
-            setEditUseCustomCoverUrl(true);
-          }
-        }}
-      />
       <AnimatePresence>
         {viewingImage && (
           <div className="fixed inset-0 z-[110] bg-black/95 flex items-center justify-center p-4">

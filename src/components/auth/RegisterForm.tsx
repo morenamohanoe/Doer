@@ -129,7 +129,8 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
         verificationStatus: 'unverified',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        profileCompleted: false // Onboarding needed
+        profileCompleted: false, // Onboarding needed
+        role: 'doer'
       };
 
       const cleanUserPayload: Record<string, any> = {};
@@ -304,16 +305,16 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
 
               {/* Avatar Upload */}
               <div className="w-full">
-                <label className="block w-full cursor-pointer bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors rounded-xl p-3 text-center">
-                  <span className="text-xs font-bold text-slate-700 block mb-1">Upload Profile Image</span>
-                  <span className="text-[10px] text-slate-500 font-semibold block">Click to select an image file</span>
+                <div className="w-full">
+                  <span className="block text-xs font-bold text-slate-700 mb-1">Profile Image URL (Optional)</span>
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
+                    type="text"
+                    placeholder="https://... avatar link"
+                    value={customProfileUrl}
+                    onChange={(e) => setCustomProfileUrl(e.target.value)}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-all"
                   />
-                </label>
+                </div>
               </div>
             </div>
 

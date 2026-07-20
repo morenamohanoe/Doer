@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion } from 'motion/react';
 import { X, CheckCircle2, Tag, ShoppingBag, Sparkles } from 'lucide-react';
-import { PRODUCT_CATEGORIES } from '../lib/mockData';
+import { submitCategoryRequest, addServiceCategory } from '../lib/categories';
 
 interface PostProductModalProps {
   isOpen: boolean;
@@ -21,17 +21,20 @@ const presetImages = [
 ];
 
 export default function PostProductModal({ isOpen, onClose }: PostProductModalProps) {
-  const { postProduct, triggerSound } = useApp();
+  const { postProduct, triggerSound, serviceCategories, currentUser, showToast, isAdmin } = useApp();
 
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState(PRODUCT_CATEGORIES[0].id);
+  const [category, setCategory] = useState(serviceCategories[0]?.id || '');
   const [stock, setStock] = useState('10');
   const [imageUrl, setImageUrl] = useState('');
 
   const [error, setError] = useState('');
+  const [isAddingCustomCategory, setIsAddingCustomCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isSubmittingCategory, setIsSubmittingCategory] = useState(false);
 
   if (!isOpen) return null;
 
@@ -54,6 +57,39 @@ export default function PostProductModal({ isOpen, onClose }: PostProductModalPr
     setStep((prev) => Math.max(prev - 1, 1));
   };
 
+  const handleAddCustomCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setIsSubmittingCategory(true);
+    try {
+      if (isAdmin) {
+        const categoryId = await addServiceCategory({
+          name: newCategoryName.trim(),
+          description: 'Admin quick added product category',
+          icon: 'Sparkles',
+          color: 'from-emerald-500 to-emerald-600',
+          displayOrder: 100,
+          status: 'approved',
+          createdBy: currentUser.id
+        });
+        setCategory(categoryId);
+        showToast(`Category "${newCategoryName}" created!`, 'success');
+      } else {
+        await submitCategoryRequest(
+          newCategoryName.trim(),
+          currentUser.id,
+          currentUser.email || 'user@example.com'
+        );
+        showToast(`Request for "${newCategoryName}" submitted to admins!`, 'success');
+      }
+      setIsAddingCustomCategory(false);
+      setNewCategoryName('');
+    } catch (err) {
+      setError('Failed to add category.');
+    } finally {
+      setIsSubmittingCategory(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || !price) {
@@ -71,7 +107,7 @@ export default function PostProductModal({ isOpen, onClose }: PostProductModalPr
     setTitle('');
     setDescription('');
     setPrice('');
-    setCategory(PRODUCT_CATEGORIES[0].id);
+    setCategory(serviceCategories[0]?.id || '');
     setStock('10');
     setImageUrl('');
   };
@@ -163,8 +199,8 @@ export default function PostProductModal({ isOpen, onClose }: PostProductModalPr
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                   Select Product Category
                 </label>
-                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">
-                  {PRODUCT_CATEGORIES.map((cat) => (
+                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto mb-2">
+                  {serviceCategories.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
@@ -181,7 +217,52 @@ export default function PostProductModal({ isOpen, onClose }: PostProductModalPr
                       {cat.name}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerSound('click');
+                      setIsAddingCustomCategory(true);
+                    }}
+                    className="p-2.5 rounded-xl border border-dashed border-slate-300 text-slate-500 text-left text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-500" />
+                    Suggest New...
+                  </button>
                 </div>
+
+                {isAddingCustomCategory && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2"
+                  >
+                    <p className="text-[10px] font-black text-emerald-800 uppercase tracking-tight">Request New Category</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Category Name"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomCategory}
+                        disabled={isSubmittingCategory || !newCategoryName.trim()}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-black disabled:opacity-50"
+                      >
+                        {isSubmittingCategory ? '...' : 'Add'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingCustomCategory(false)}
+                        className="px-2 py-2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </div>
           )}

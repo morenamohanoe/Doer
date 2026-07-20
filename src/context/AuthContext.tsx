@@ -9,20 +9,26 @@ interface AuthContextProps {
   loading: boolean;
   profile: any | null;
   profileLoading: boolean;
+  isAdmin: boolean;
 }
 
-const AuthContext = createContext<AuthContextProps>({ user: null, loading: true, profile: null, profileLoading: true });
+const AuthContext = createContext<AuthContextProps>({ user: null, loading: true, profile: null, profileLoading: true, isAdmin: false });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, loadingSet] = useState(true);
   const [profile, setProfile] = useState<any | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setProfileLoading(true);
+        const tokenResult = await user.getIdTokenResult();
+        setIsAdmin(tokenResult.claims.role === 'admin');
+      } else {
+        setIsAdmin(false);
       }
       setUser(user);
       loadingSet(false);
@@ -60,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 lastName,
                 avatarUrl: user.photoURL || '',
                 profileCompleted: false,
+                role: 'doer',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
               }, { merge: true });
@@ -103,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, profile, profileLoading }}>
+    <AuthContext.Provider value={{ user, loading, profile, profileLoading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
