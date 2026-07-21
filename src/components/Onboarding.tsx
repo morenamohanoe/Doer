@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, ShieldCheck, CheckCircle2, Shield, Briefcase, Star } from 'lucide-react';
+import { logError } from '../lib/logger';
 
 const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
 
@@ -185,7 +186,7 @@ export default function Onboarding() {
 
       window.location.reload();
     } catch (err: any) {
-      console.error('Error saving onboarding info:', err);
+      logError('Error saving onboarding info:', err);
       setErrorMsg(err.message || 'Failed to complete profile onboarding.');
       setLoading(false);
     }
@@ -238,7 +239,7 @@ export default function Onboarding() {
 
       window.location.reload();
     } catch (err: any) {
-      console.error('Error skipping onboarding:', err);
+      logError('Error skipping onboarding:', err);
       setErrorMsg(err.message || 'Failed to skip onboarding.');
       setLoading(false);
     }

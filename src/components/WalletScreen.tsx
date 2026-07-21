@@ -25,6 +25,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import QRCodeScannerModal from './QRCodeScannerModal';
 import EarningsPieChart from './EarningsPieChart';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { logError, logWarn } from '../lib/logger';
 
 const isValidDate = (d: any): d is Date => {
   return d instanceof Date && !isNaN(d.getTime());
@@ -93,7 +94,7 @@ export default function WalletScreen() {
       try {
         navigator.vibrate(pattern);
       } catch (e) {
-        console.warn("Haptic feedback not supported in this browser context", e);
+        logWarn("Haptic feedback not supported in this browser context", e);
       }
     }
   };
@@ -201,7 +202,7 @@ Secured by DOER Escrow Services.
       };
       img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
     } catch (e) {
-      console.error(e);
+      logError(e);
       showToast('Failed to save QR code', 'error');
     }
   };
@@ -272,7 +273,7 @@ Secured by DOER Escrow Services.
       setPayRef(reference || '');
       setShowConfirmPaymentModal(true);
     } catch (e) {
-      console.error(e);
+      logError(e);
       showToast('Error parsing QR code!', 'error');
     }
   };
@@ -318,7 +319,7 @@ Secured by DOER Escrow Services.
         }
       }
     } catch (e) {
-      console.error(e);
+      logError(e);
     } finally {
       setIsExecutingTransfer(false);
     }

@@ -31,6 +31,7 @@ import {
 import CategoryIcon, { POPULAR_ICONS } from './CategoryIcon';
 import ConfirmationModal from './ConfirmationModal';
 import GlobalSystemCutSettings from './admin/GlobalSystemCutSettings';
+import { logError } from '../lib/logger';
 
 const PRESET_GRADIENTS = [
   { name: 'Sunset Red', class: 'from-orange-500 to-red-600' },
@@ -161,7 +162,7 @@ export default function AdminCategoryModeration() {
       setIsFormOpen(false);
       triggerSound('success');
     } catch (err) {
-      console.error(err);
+      logError(err);
       showToast('Failed to save category', 'error');
     } finally {
       setIsSubmitting(false);
@@ -231,7 +232,7 @@ export default function AdminCategoryModeration() {
       showToast(`Category request approved and created!`, 'success');
       triggerSound('success');
     } catch (err) {
-      console.error(err);
+      logError(err);
       showToast('Failed to approve request', 'error');
     } finally {
       setIsSubmitting(false);

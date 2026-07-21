@@ -32,6 +32,7 @@ import QRCodeScannerModal from './QRCodeScannerModal';
 import { QrCode } from 'lucide-react';
 import CategoryIcon from './CategoryIcon';
 import PostServiceModal from './PostServiceModal';
+import { logError } from '../lib/logger';
 
 export const formatServicePrice = (srv: Service) => {
   const pType = srv.pricingType || (srv.priceUnit === 'night' ? 'day' : srv.priceUnit === 'hr' ? 'hour' : srv.priceUnit) || 'fixed';
@@ -328,7 +329,7 @@ export default function HomeFeed() {
         title,
         text,
         url: window.location.href,
-      }).catch(console.error);
+      }).catch(logError);
     } else {
       navigator.clipboard.writeText(`${title} - ${window.location.href}`);
       showToast('Link copied to clipboard!');

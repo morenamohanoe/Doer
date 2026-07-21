@@ -24,7 +24,7 @@ class GlobalErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Global Error Caught:", error, errorInfo);
+    logError("Global Error Caught:", error, errorInfo);
   }
 
   render() {
@@ -46,6 +46,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
 import { AuthProvider } from './context/AuthContext.tsx';
 import './index.css';
+import { logError } from './lib/logger';
 
 const queryClient = new QueryClient();
 

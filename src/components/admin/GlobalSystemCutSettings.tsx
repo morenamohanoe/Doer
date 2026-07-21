@@ -4,6 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { useApp } from '../../context/AppContext';
 import { Save, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { logError } from '../../lib/logger';
 
 export default function GlobalSystemCutSettings() {
   const { withdrawalFeePercentage, serviceFee } = useApp();
@@ -29,7 +30,7 @@ export default function GlobalSystemCutSettings() {
       setIsEditing(false);
       setShowConfirm(false);
     } catch (e) {
-      console.error(e);
+      logError(e);
       alert('Failed to save settings.');
     } finally {
       setSaving(false);

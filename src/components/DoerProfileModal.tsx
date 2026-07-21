@@ -36,6 +36,7 @@ import { PortfolioProject, PortfolioImage } from '../types';
 import PortfolioMasonryGrid from './PortfolioMasonryGrid';
 import PostServiceModal from './PostServiceModal';
 import ConfirmationModal from './ConfirmationModal';
+import { logError } from '../lib/logger';
 
 interface DoerProfileModalProps {
   doerId: string; // ID of the role profile to display
@@ -71,7 +72,7 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
         title,
         text,
         url: window.location.href,
-      }).catch(console.error);
+      }).catch(logError);
     } else {
       navigator.clipboard.writeText(`${title} - ${window.location.href}`);
       showToast('Link copied to clipboard!');

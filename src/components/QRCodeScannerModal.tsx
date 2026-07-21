@@ -3,6 +3,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, QrCode } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { logError } from '../lib/logger';
 
 interface QRCodeScannerModalProps {
   isOpen: boolean;
@@ -76,7 +77,7 @@ export default function QRCodeScannerModal({ isOpen, onClose, onScanSuccess, onR
                 <div className="w-full bg-slate-100 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
                   <Scanner 
                     onScan={handleScan}
-                    onError={(error) => console.error(error)}
+                    onError={(error) => logError(error)}
                     components={{
                       audio: false,
                       finder: true

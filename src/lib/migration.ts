@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { logError } from './logger';
 
 /**
  * Migration script to consolidate legacy collections into the new production schema.
@@ -188,6 +189,6 @@ export async function migrateExistingUser(uid: string) {
     console.log(`[Migration] Successfully cleaned up legacy documents for ${uid}`);
 
   } catch (error) {
-    console.error(`[Migration] Failed migrating user ${uid}:`, error);
+    logError(`[Migration] Failed migrating user ${uid}:`, error);
   }
 }

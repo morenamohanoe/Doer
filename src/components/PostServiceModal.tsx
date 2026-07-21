@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Sparkles, Search, Plus, Loader2, Trash2, Upload } from 'lucide-react';
 import { addServiceCategory, submitCategoryRequest } from '../lib/categories';
 import { Service } from '../types';
+import { logError } from '../lib/logger';
 
 interface PostServiceModalProps {
   isOpen: boolean;
@@ -166,7 +167,7 @@ export default function PostServiceModal({ isOpen, onClose, editingService }: Po
       setNewCategoryName('');
       triggerSound('success');
     } catch (err) {
-      console.error(err);
+      logError(err);
       showToast('Failed to process category action', 'error');
     } finally {
       setIsSubmittingCategory(false);

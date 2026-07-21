@@ -4,6 +4,7 @@ import { auth, db, handleFirestoreError, OperationType } from '../../lib/firebas
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { logWarn } from '../../lib/logger';
 
 interface RegisterFormProps {
   onBack: () => void;
@@ -142,7 +143,7 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
       }
       
     } catch (error: any) {
-      console.warn(error);
+      logWarn(error);
       setErrorMsg(error.message || 'An error occurred during registration.');
       setLoading(false);
     }

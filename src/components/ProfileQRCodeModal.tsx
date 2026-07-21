@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Download, Share2 } from 'lucide-react';
+import { logError } from '../lib/logger';
 
 interface ProfileQRCodeModalProps {
   isOpen: boolean;
@@ -48,7 +49,7 @@ export default function ProfileQRCodeModal({ isOpen, onClose, profileId, profile
           url: profileUrl,
         });
       } catch (err) {
-        console.error('Error sharing', err);
+        logError('Error sharing', err);
       }
     }
   };

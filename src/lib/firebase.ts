@@ -3,6 +3,7 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { logError } from './logger';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || 'ai-studio-doer-5d4a57f4-3066-4fec-a081-9fae989dbe87');
@@ -52,11 +53,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  logError('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-if (import.meta.env.DEV) {
+import { config } from './config';
+
+if (config.env.isDev) {
   // Silent in browser console to prevent showing project/database configuration
 }
 

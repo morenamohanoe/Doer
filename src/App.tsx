@@ -1,3 +1,4 @@
+import { logWarn } from './lib/logger';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -231,7 +232,7 @@ function AppContent() {
             try {
               navigator.vibrate([120, 80, 120]);
             } catch (e) {
-              console.warn('Haptic vibration failed:', e);
+              logWarn('Haptic vibration failed:', e);
             }
           }
           triggerSound('success');
@@ -244,7 +245,7 @@ function AppContent() {
             try {
               navigator.vibrate(200);
             } catch (e) {
-              console.warn('Haptic vibration failed:', e);
+              logWarn('Haptic vibration failed:', e);
             }
           }
           triggerSound('success');
@@ -258,9 +259,14 @@ function AppContent() {
   }, [serviceRequests, showToast, triggerSound]);
 
   // Periodic service-worker simulated polling effect to print active escrow telemetry logs
+  const serviceRequestsRef = React.useRef(serviceRequests);
+  React.useEffect(() => {
+    serviceRequestsRef.current = serviceRequests;
+  }, [serviceRequests]);
+
   React.useEffect(() => {
     const interval = setInterval(() => {
-      const pendingOrHeld = (serviceRequests || []).filter(
+      const pendingOrHeld = (serviceRequestsRef.current || []).filter(
         req => ['requested', 'accepted', 'deposit_paid'].includes(req.status)
       );
       console.log(
@@ -269,7 +275,7 @@ function AppContent() {
       );
     }, 12000);
     return () => clearInterval(interval);
-  }, [serviceRequests]);
+  }, []);
 
   // Payment Failed notification alert detection
   const [activeFailedPayment, setActiveFailedPayment] = React.useState<any | null>(null);
@@ -287,7 +293,7 @@ function AppContent() {
         try {
           navigator.vibrate([200, 100, 200]);
         } catch (e) {
-          console.warn('Haptic vibration failed:', e);
+          logWarn('Haptic vibration failed:', e);
         }
       }
     }
@@ -307,7 +313,8 @@ function AppContent() {
     return <Onboarding />;
   }
 
-  const filteredNotifications = notifications?.filter(n => {
+  const filteredNotifications = React.useMemo(() => {
+    return notifications?.filter(n => {
     // Apply Global User Preferences first
     if (n.type === 'booking' && !notificationSettings.jobUpdates) return false;
     if (n.type === 'message' && !notificationSettings.messages) return false;
@@ -323,8 +330,9 @@ function AppContent() {
     if (activeNotificationCategory === 'Payments') return n.type === 'payment';
     return true;
   });
+  }, [notifications, notificationSettings, activeNotificationCategory]);
 
-  const handleClearAll = () => {
+  const handleClearAll = React.useCallback(() => {
     if (!notifications || notifications.length === 0) {
       showToast("No notifications to clear", 'info');
       return;
@@ -335,14 +343,14 @@ function AppContent() {
     showToast("Notifications cleared", 'info');
     setIsNotificationOpen(false);
     triggerSound('click');
-  };
+  }, [notifications, clearAllNotifications, showToast, triggerSound]);
 
-  const handleOpenNotifications = () => {
+  const handleOpenNotifications = React.useCallback(() => {
     triggerSound('click');
     setIsNotificationOpen(true);
-  };
+  }, [triggerSound]);
 
-  const handleNotificationClick = (n: any) => {
+  const handleNotificationClick = React.useCallback((n: any) => {
     markAsRead(n.id);
     triggerSound('click');
     setIsNotificationOpen(false);
@@ -374,7 +382,7 @@ function AppContent() {
         setTab('admin');
       }
     }
-  };
+  }, [markAsRead, triggerSound, setTab]);
 
   const getSavedItemDetails = (item: any) => {
     if (item.itemType === 'service') {

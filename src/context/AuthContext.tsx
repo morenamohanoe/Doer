@@ -3,6 +3,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, onSnapshot, collection, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { migrateExistingUser } from '../lib/migration';
+import { logError } from '../lib/logger';
 
 interface AuthContextProps {
   user: (FirebaseUser & { role?: 'admin' | 'doer' }) | null;
@@ -86,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
       } catch (err) {
-        console.error("Migration/Initialization failed:", err);
+        logError("Migration/Initialization failed:", err);
       }
     };
 
@@ -117,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.log("[AuthContext] Pre-created admin user document for morenamohanoe@gmail.com");
             }
           } catch (e) {
-            console.error("Failed to initialize admin role for morenamohanoe@gmail.com:", e);
+            logError("Failed to initialize admin role for morenamohanoe@gmail.com:", e);
           }
         };
         initAdminRole();

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { logError } from '../lib/logger';
 
 export const usePullToRefresh = (onRefresh: () => Promise<void>) => {
   const { triggerSound } = useApp();
@@ -57,7 +58,7 @@ export const usePullToRefresh = (onRefresh: () => Promise<void>) => {
         setIsSuccess(true);
         triggerSound('success');
       } catch (error) {
-        console.error("Refresh failed", error);
+        logError("Refresh failed", error);
       } finally {
         setIsRefreshing(false);
         setTimeout(() => {

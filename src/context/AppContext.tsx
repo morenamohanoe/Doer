@@ -1,3 +1,4 @@
+import { logError, logWarn } from '../lib/logger';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -240,7 +241,7 @@ const playSynthSound = (type: 'click' | 'success' | 'notification' | 'cash') => 
       osc2.stop(ctx.currentTime + 0.35);
     }
   } catch (e) {
-    console.warn('Audio synthesis not allowed/supported yet:', e);
+    logWarn('Audio synthesis not allowed/supported yet:', e);
   }
 };
 
@@ -455,7 +456,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               await firestore.setDoc(firestore.doc(db, 'services', srv.id), updatedSrv, { merge: true });
               console.log(`Successfully migrated service: ${srv.id}`);
             } catch (err) {
-              console.error(`Failed migrating service document ${srv.id}:`, err);
+              logError(`Failed migrating service document ${srv.id}:`, err);
             }
           }
         }
@@ -713,7 +714,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateTransfersState();
       },
       (error) => {
-        console.error("Error subscribing to sent transfers:", error);
+        logError("Error subscribing to sent transfers:", error);
       }
     );
 
@@ -743,7 +744,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateTransfersState();
       },
       (error) => {
-        console.error("Error subscribing to received transfers:", error);
+        logError("Error subscribing to received transfers:", error);
       }
     );
 
@@ -814,7 +815,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       setConversations(data);
     }, (error) => {
-      console.warn("Conversations listener error:", error);
+      logWarn("Conversations listener error:", error);
     });
 
     return unsubscribe;
@@ -872,7 +873,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       setMessages(data);
     }, (error) => {
-      console.warn("Messages listener error:", error);
+      logWarn("Messages listener error:", error);
     });
 
     return unsubscribe;
@@ -906,7 +907,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    const isUserAdmin = currentUser?.role === 'admin';
+    const isUserAdmin = currentUser?.role === 'admin' && !!user;
     if (!isUserAdmin) {
       setCategoryRequests([]);
       return;
@@ -922,7 +923,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       handleFirestoreError(error, OperationType.GET, 'category_requests');
     });
     return unsubscribe;
-  }, [user]);
+  }, [user, currentUser?.role]);
 
   const [reviews, setReviews] = useState<Review[]>([]);
   
@@ -951,7 +952,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Trigger profile recalculation
       recalculateMyProfiles(requests);
     }, (error) => {
-      console.warn("Service requests listener error:", error);
+      logWarn("Service requests listener error:", error);
     });
 
     return unsubscribe;
@@ -1061,7 +1062,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }, (error) => {
-      console.error("Error fetching platform settings:", error);
+      logError("Error fetching platform settings:", error);
     });
     return unsubscribe;
   }, []);
@@ -1109,7 +1110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       setSavedItems(items);
     }, (error) => {
-      console.error("Error fetching saved items:", error);
+      logError("Error fetching saved items:", error);
       handleFirestoreError(error, OperationType.GET, 'saved_items');
     });
 
@@ -1181,7 +1182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } as PortfolioProject));
       setPortfolioProjects(projects);
     }, (error) => {
-      console.error("Error fetching portfolio projects:", error);
+      logError("Error fetching portfolio projects:", error);
       handleFirestoreError(error, OperationType.GET, 'portfolio_projects');
     });
     return () => unsubscribe();
@@ -1197,7 +1198,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } as PortfolioImage));
       setPortfolioImages(images);
     }, (error) => {
-      console.error("Error fetching portfolio images:", error);
+      logError("Error fetching portfolio images:", error);
       handleFirestoreError(error, OperationType.GET, 'portfolio_images');
     });
     return () => unsubscribe();
@@ -1227,25 +1228,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('doer_notification_settings', JSON.stringify(notificationSettings));
   }, [notificationSettings]);
 
-  const triggerSound = (type: 'click' | 'success' | 'notification' | 'cash') => {
+  const triggerSound = React.useCallback((type: 'click' | 'success' | 'notification' | 'cash') => {
     playSynthSound(type);
-  };
+  }, []);
 
   const triggerVibration = (pattern: number | number[]) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try {
         navigator.vibrate(pattern);
       } catch (e) {
-        console.warn("Haptic feedback not supported in this browser context", e);
+        logWarn("Haptic feedback not supported in this browser context", e);
       }
     }
   };
 
-  const removeToast = (id: string) => {
+  const removeToast = React.useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
-  const showToast = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', duration = 3000) => {
+  const showToast = React.useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', duration = 3000) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newToast: Toast = { id, message, type, duration };
     setToasts((prev) => [...prev, newToast]);
@@ -1255,7 +1256,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         removeToast(id);
       }, duration);
     }
-  };
+  }, [removeToast]);
 
   // --- ONBOARDING ENGINE ---
   const nextOnboardingStep = () => {
@@ -1569,9 +1570,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Service Published! 💼', `"${title}" is now live and visible to users.`, 'info');
       showToast(`Service "${title}" published! 💼`, 'success');
     } catch (err: any) {
-      console.error("CRITICAL ERROR: Failed to publish service to Firestore:", err);
-      console.error("Firestore Error Code:", err?.code);
-      console.error("Firestore Error Message:", err?.message);
+      logError("CRITICAL ERROR: Failed to publish service to Firestore:", err);
+      logError("Firestore Error Code:", err?.code);
+      logError("Firestore Error Message:", err?.message);
       showToast(`Publishing failed: ${err?.message || err}`, 'error');
       handleFirestoreError(err, OperationType.WRITE, 'services');
     }
@@ -1586,7 +1587,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Service Deleted 🗑️', 'The service listing has been removed.', 'info');
       showToast('Service listing deleted.', 'success');
     } catch (err: any) {
-      console.error("Failed to delete service:", err);
+      logError("Failed to delete service:", err);
       setServices(previousServices);
       handleFirestoreError(err, OperationType.DELETE, 'services');
     }
@@ -1616,7 +1617,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Service Updated 📝', 'Your changes have been saved.', 'info');
       showToast('Service updated successfully.', 'success');
     } catch (err: any) {
-      console.error("Failed to update service:", err);
+      logError("Failed to update service:", err);
       handleFirestoreError(err, OperationType.UPDATE, 'services');
     }
   };
@@ -1654,7 +1655,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Product Published! 🛍️', `"${title}" has been listed on the marketplace.`, 'info');
       showToast(`Product "${title}" published! 🛍️`, 'success');
     } catch (err: any) {
-      console.error("Failed to post product to Firestore:", err);
+      logError("Failed to post product to Firestore:", err);
       showToast(`Failed to publish product to database: ${err?.message || err}`, 'error');
       handleFirestoreError(err, OperationType.WRITE, 'products');
     }
@@ -1669,7 +1670,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Product Deleted 🗑️', 'The product listing has been removed.', 'info');
       showToast('Product listing deleted.', 'success');
     } catch (err: any) {
-      console.error("Failed to delete product:", err);
+      logError("Failed to delete product:", err);
       setProducts(previousProducts);
       handleFirestoreError(err, OperationType.DELETE, 'products');
     }
@@ -1749,7 +1750,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Sync to Firestore
     firestore.setDoc(firestore.doc(db, 'service_requests', requestId), newRequest)
-      .catch(err => console.error("Failed to sync request to Firestore:", err));
+      .catch(err => logError("Failed to sync request to Firestore:", err));
 
     // Create Escrow Transaction record
     const newTx: EscrowTransaction = {
@@ -1858,7 +1859,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...newMsg,
       timestamp: firestore.serverTimestamp(),
       createdAt: firestore.serverTimestamp()
-    }).catch(err => console.error("Failed to send simulated message to Firestore:", err));
+    }).catch(err => logError("Failed to send simulated message to Firestore:", err));
 
     firestore.updateDoc(firestore.doc(db, 'conversations', conversationId), {
       lastMessage: text,
@@ -1866,7 +1867,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       lastMessageSenderName: doerName,
       lastMessageTime: firestore.serverTimestamp(),
       unreadCount: firestore.increment(1)
-    }).catch(err => console.error("Failed to update conversation preview in Firestore:", err));
+    }).catch(err => logError("Failed to update conversation preview in Firestore:", err));
   };
 
   const updateRequestStatus = (
@@ -1926,7 +1927,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         firestore.setDoc(firestore.doc(db, 'conversations', conversationId), {
           ...newConv,
           createdAt: firestore.serverTimestamp()
-        }).catch(err => console.error("Failed to create conversation in Firestore:", err));
+        }).catch(err => logError("Failed to create conversation in Firestore:", err));
       }
 
       // Initial System Message in chat
@@ -1949,7 +1950,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...systemMsg,
         timestamp: firestore.serverTimestamp(),
         createdAt: firestore.serverTimestamp()
-      }).catch(err => console.error("Failed to create system message in Firestore:", err));
+      }).catch(err => logError("Failed to create system message in Firestore:", err));
 
     } else if (nextStatus === 'rejected') {
       logText = `Job request for "${req.title}" was declined by the DOER.`;
@@ -1987,7 +1988,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               updatedAt: firestore.serverTimestamp()
             });
           }
-        }).catch(console.error);
+        }).catch(logError);
         
         // If the current user IS the doer, we update local state too
         if (req.doerId === currentUser.id) {
@@ -2131,7 +2132,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               balance: currentBal + req.price,
               updatedAt: firestore.serverTimestamp()
             }, { merge: true });
-          }).catch(console.error);
+          }).catch(logError);
         }
       } else if (req.doerId === currentUser.id) {
         // If we are the doer, we see the impact in our local wallet
@@ -2203,7 +2204,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (scheduledCompletionTime) firestoreUpdate.scheduledCompletionTime = scheduledCompletionTime;
     if (completionDurationText) firestoreUpdate.completionDurationText = completionDurationText;
 
-    firestore.updateDoc(firestore.doc(db, 'service_requests', requestId), firestoreUpdate).catch(err => console.error("Failed to update request status in Firestore:", err));
+    firestore.updateDoc(firestore.doc(db, 'service_requests', requestId), firestoreUpdate).catch(err => logError("Failed to update request status in Firestore:", err));
 
     // Write system message inside chat
     const sysMsg: Message = {
@@ -2227,7 +2228,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...sysMsg,
       timestamp: firestore.serverTimestamp(),
       createdAt: firestore.serverTimestamp()
-    }).catch(err => console.error("Failed to write system status log message to Firestore:", err));
+    }).catch(err => logError("Failed to write system status log message to Firestore:", err));
 
     // Apply wallet impact
     if (isWalletImpact) {
@@ -2245,7 +2246,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           balance: newBalance,
           escrowBalance: newEscrow,
           updatedAt: firestore.serverTimestamp()
-        }, { merge: true }).catch(console.error);
+        }, { merge: true }).catch(logError);
       }
     }
 
@@ -2267,7 +2268,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Prevent users from sending messages to themselves
     if (currentUser.id && recipientId && currentUser.id === recipientId) {
-      console.warn("Attempted to send message to oneself. Aborting.");
+      logWarn("Attempted to send message to oneself. Aborting.");
       showToast("You cannot send messages to yourself!", "error");
       return;
     }
@@ -2295,7 +2296,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...newMsg,
       timestamp: firestore.serverTimestamp(),
       createdAt: firestore.serverTimestamp()
-    }).catch(err => console.error("Failed to send message to Firestore:", err));
+    }).catch(err => logError("Failed to send message to Firestore:", err));
 
     // Notify recipient
     if (activeConv) {
@@ -2312,7 +2313,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         lastMessageText: text || 'Sent an image 📸',
         lastMessageTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         unreadCount: firestore.increment(1) // This is a bit naive but works for mock
-      }).catch(err => console.error("Failed to update conversation in Firestore:", err));
+      }).catch(err => logError("Failed to update conversation in Firestore:", err));
     }
 
     // --- SIMULATED MOCK DOER REPLY ---
@@ -2342,7 +2343,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
 
         if (doerReply.senderId === doerReply.receiverId) {
-          console.warn("Mock doer reply would be to themselves. Aborting.");
+          logWarn("Mock doer reply would be to themselves. Aborting.");
           return;
         }
 
@@ -2351,7 +2352,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...doerReply,
           timestamp: firestore.serverTimestamp(),
           createdAt: firestore.serverTimestamp()
-        }).catch(err => console.error("Failed to send mock reply to Firestore:", err));
+        }).catch(err => logError("Failed to send mock reply to Firestore:", err));
 
         triggerSound('notification');
 
@@ -2360,7 +2361,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           lastMessageText: textReply,
           lastMessageTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           unreadCount: firestore.increment(1)
-        }).catch(err => console.error("Failed to update conversation in Firestore:", err));
+        }).catch(err => logError("Failed to update conversation in Firestore:", err));
       }, 2500);
     }
   };
@@ -2392,10 +2393,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...typingMsg,
         timestamp: firestore.serverTimestamp(),
         createdAt: firestore.serverTimestamp()
-      }).catch(err => console.error("Failed to set typing status:", err));
+      }).catch(err => logError("Failed to set typing status:", err));
     } else {
       firestore.deleteDoc(firestore.doc(db, 'messages', docId))
-        .catch(err => console.error("Failed to delete typing status:", err));
+        .catch(err => logError("Failed to delete typing status:", err));
     }
   };
 
@@ -2412,7 +2413,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const promises = unreadReceivedMessages.map((msg) => {
       return firestore.updateDoc(firestore.doc(db, 'messages', msg.id), {
         read: true
-      }).catch(err => console.error("Failed to mark message as read:", err));
+      }).catch(err => logError("Failed to mark message as read:", err));
     });
 
     await Promise.all(promises);
@@ -2420,7 +2421,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Reset unread count for conversation in Firestore
     firestore.updateDoc(firestore.doc(db, 'conversations', conversationId), {
       unreadCount: 0
-    }).catch(err => console.error("Failed to reset unread count:", err));
+    }).catch(err => logError("Failed to reset unread count:", err));
   };
 
   // --- REVIEWS ENGINE ---
@@ -2445,7 +2446,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Review Submitted! 🌟', 'Thank you for your feedback! This helps calculate the community Trust Score.', 'info');
       showToast('Review submitted successfully! 🌟', 'success');
     } catch (err) {
-      console.error(err);
+      logError(err);
       showToast('Failed to submit review', 'error');
     }
   };
@@ -2492,7 +2493,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Wallet Topped Up! 💸', `Successfully added R${amount} to your DOER Wallet.`, 'payment');
       showToast(`R${amount} added to your wallet!`, 'success');
     } catch (e) {
-      console.error('Error topping up:', e);
+      logError('Error topping up:', e);
       showToast('Error updating wallet', 'error');
     }
   };
@@ -2571,7 +2572,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       showToast(`Transferred R${amount} to ${recipientName}!`, 'success');
       return true;
     } catch (e) {
-      console.error('Error executing transfer:', e);
+      logError('Error executing transfer:', e);
       showToast('Error transferring funds. Please try again.', 'error');
       
       // Revert wallet balance state on database error
@@ -2664,11 +2665,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             );
             showToast(`Withdrawal of R${amount} completed! ✅`, 'success');
           } catch (e) {
-            console.error('Error completing withdrawal', e);
+            logError('Error completing withdrawal', e);
           }
         }, 6000);
       } catch (e) {
-        console.error('Error requesting withdrawal:', e);
+        logError('Error requesting withdrawal:', e);
         showToast('Error requesting withdrawal', 'error');
       }
     })();
@@ -2741,7 +2742,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       prevNotificationsRef.current = newNotifications;
       setNotifications(newNotifications);
     }, (error) => {
-      console.error("Error fetching notifications:", error);
+      logError("Error fetching notifications:", error);
     });
 
     return () => unsubscribe();
@@ -2781,7 +2782,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }).length;
         setUnreadCount(unread);
       } catch (err) {
-        console.error("Error in background payment status listener:", err);
+        logError("Error in background payment status listener:", err);
       }
     };
 
@@ -2802,7 +2803,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updatedAt: firestore.serverTimestamp()
       });
     } catch (err) {
-      console.error("Failed to mark as read:", err);
+      logError("Failed to mark as read:", err);
       // Revert if needed (onSnapshot will eventually fix it anyway)
     }
   };
@@ -2822,7 +2823,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await batch.commit();
       triggerSound('success');
     } catch (err) {
-      console.error("Failed to mark all as read:", err);
+      logError("Failed to mark all as read:", err);
     }
   };
 
@@ -2836,7 +2837,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await firestore.deleteDoc(firestore.doc(db, 'notifications', id));
       triggerSound('click');
     } catch (err) {
-      console.error("Failed to clear notification:", err);
+      logError("Failed to clear notification:", err);
       // Re-fetch or let onSnapshot handle recovery
     }
   };
@@ -2870,7 +2871,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       triggerSound('click');
     } catch (err) {
-      console.error("Failed to clear all notifications:", err);
+      logError("Failed to clear all notifications:", err);
     }
   };
 
@@ -2898,7 +2899,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           showToast(`Saved to Favorites ❤️`, 'success');
         }
       } catch (error: any) {
-        console.error("Error toggling saved item in Firestore:", error);
+        logError("Error toggling saved item in Firestore:", error);
         handleFirestoreError(error, OperationType.WRITE, 'saved_items');
       }
     } else {
@@ -2942,7 +2943,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           showToast(`Successfully removed ${count} items`, 'info');
         }
       } catch (error: any) {
-        console.error("Error batch removing saved items in Firestore:", error);
+        logError("Error batch removing saved items in Firestore:", error);
         handleFirestoreError(error, OperationType.DELETE, 'saved_items');
       }
     } else {
@@ -2985,7 +2986,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       showToast('Conversation deleted successfully', 'success');
     } catch (err) {
-      console.error("Failed to delete conversation from Firestore:", err);
+      logError("Failed to delete conversation from Firestore:", err);
       showToast('Error deleting conversation', 'error');
     }
   };
@@ -3048,7 +3049,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatchNotification('Portfolio Project Added! 🎨', 'Adding a project is a great way to showcase your skills and boost your Trust Score.', 'info');
       showToast(`Portfolio project "${title}" created successfully! 🎨`, 'success');
     } catch (err) {
-      console.error("Error adding portfolio project:", err);
+      logError("Error adding portfolio project:", err);
       showToast('Failed to save portfolio project', 'error');
     }
   };
@@ -3083,15 +3084,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Check for upcoming job completions
+  const currentUserRef = useRef(currentUser);
+  const serviceRequestsRef = useRef(serviceRequests);
+
   useEffect(() => {
-    if (!currentUser) return;
-    
+    currentUserRef.current = currentUser;
+    serviceRequestsRef.current = serviceRequests;
+  }, [currentUser, serviceRequests]);
+
+  useEffect(() => {
     const checkInterval = setInterval(() => {
+      const currentUsr = currentUserRef.current;
+      if (!currentUsr) return;
+      
       const now = new Date();
-      const inProgressRequests = serviceRequests.filter(r => 
+      const inProgressRequests = (serviceRequestsRef.current || []).filter(r => 
         r.status === 'in_progress' && 
         r.scheduledCompletionTime &&
-        (r.bookingOwnerId === currentUser.id || r.doerId === currentUser.id)
+        (r.bookingOwnerId === currentUsr.id || r.doerId === currentUsr.id)
       );
       
       inProgressRequests.forEach(req => {
@@ -3135,7 +3145,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     
     return () => clearInterval(checkInterval);
-  }, [serviceRequests, currentUser]);
+  }, []);
 
   return (
     <AppContext.Provider

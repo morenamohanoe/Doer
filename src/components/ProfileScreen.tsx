@@ -37,6 +37,7 @@ import PortfolioGalleryWithLightbox from './PortfolioGalleryWithLightbox';
 import VerificationDetailsModal from './VerificationDetailsModal';
 import DynamicPricingCalculator from './DynamicPricingCalculator';
 import ProfileQRCodeModal from './ProfileQRCodeModal';
+import { logError } from '../lib/logger';
 
 export default function ProfileScreen() {
   const {
@@ -84,7 +85,7 @@ export default function ProfileScreen() {
       try {
         setScanHistory(JSON.parse(history));
       } catch (e) {
-        console.error('Failed to parse scan history');
+        logError('Failed to parse scan history');
       }
     }
   }, []);
@@ -124,7 +125,7 @@ export default function ProfileScreen() {
       showToast('Credentials submitted for manual verification!', 'success');
       setShowCredForm(false);
     } catch (err) {
-      console.error(err);
+      logError(err);
       showToast('Failed to submit credentials', 'error');
     } finally {
       setIsSubmittingCred(false);
@@ -144,7 +145,7 @@ export default function ProfileScreen() {
       
       showToast('Credentials manually approved! Verified Badge unlocked 🛡️', 'success');
     } catch (err) {
-      console.error(err);
+      logError(err);
       showToast('Failed to approve credentials', 'error');
     }
   };
@@ -422,7 +423,7 @@ export default function ProfileScreen() {
       showToast('Profile and professional details updated successfully!', 'success');
       setIsEditing(false);
     } catch (err: any) {
-      console.error('Error saving profile:', err);
+      logError('Error saving profile:', err);
       showToast(err.message || 'Failed to update profile.', 'error');
       handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
     } finally {
