@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useApp } from '../../context/AppContext';
-import { Save, AlertTriangle, ArrowRight, ShieldCheck, X } from 'lucide-react';
+import { Save, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function GlobalSystemCutSettings() {

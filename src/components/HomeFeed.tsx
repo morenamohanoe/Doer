@@ -18,12 +18,8 @@ import {
   X,
   Plus,
   Minus,
-  CheckCircle,
   Home,
-  Droplet,
-  Leaf,
   Users,
-  ChevronRight,
   ArrowLeft,
   SlidersHorizontal,
   Share2,
@@ -36,8 +32,6 @@ import QRCodeScannerModal from './QRCodeScannerModal';
 import { QrCode } from 'lucide-react';
 import CategoryIcon from './CategoryIcon';
 import PostServiceModal from './PostServiceModal';
-import { db } from '../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 
 export const formatServicePrice = (srv: Service) => {
   const pType = srv.pricingType || (srv.priceUnit === 'night' ? 'day' : srv.priceUnit === 'hr' ? 'hour' : srv.priceUnit) || 'fixed';
@@ -129,7 +123,6 @@ export function ServiceCard({ srv, triggerSound, toggleSaveItem, isSavedItem, on
   const computedRating = doerReviews.length > 0
     ? (doerReviews.reduce((acc, curr) => acc + curr.rating, 0) / doerReviews.length).toFixed(1)
     : "0.0";
-  const reviewCount = doerReviews.length;
 
   return (
     <motion.div
@@ -305,7 +298,13 @@ export default function HomeFeed() {
     isSavedItem,
     showToast,
     serviceCategories,
-    serviceFee
+    serviceFee,
+    searchQuery,
+    setSearchQuery,
+    selectedCategory,
+    setSelectedCategory,
+    filterLocation,
+    setFilterLocation
   } = useApp();
 
   const activeCategories = serviceCategories.filter(cat => cat.status === 'approved');
@@ -319,8 +318,6 @@ export default function HomeFeed() {
     return () => clearTimeout(timer);
   }, []);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [focusedDoerId, setFocusedDoerId] = useState<string | null>(null);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   //
@@ -340,11 +337,6 @@ export default function HomeFeed() {
   
   // Selection details state
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [drawerImgIndex, setDrawerImgIndex] = useState(0);
-
-  React.useEffect(() => {
-    setDrawerImgIndex(0);
-  }, [selectedService]);
   
   // Interactive multi-step booking state
   const [isBooking, setIsBooking] = useState(false);
@@ -359,7 +351,6 @@ export default function HomeFeed() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [filterPricingType, setFilterPricingType] = useState<string>('all');
-  const [filterLocation, setFilterLocation] = useState('');
   const [minRating, setMinRating] = useState<number>(0);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
 

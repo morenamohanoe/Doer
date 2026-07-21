@@ -12,14 +12,9 @@ import {
   ArrowLeft,
   ShieldCheck,
   CheckCheck,
-  Calendar,
-  Sparkles,
-  Info,
-  ChevronRight,
   MessageSquareOff,
   Trash2
 } from 'lucide-react';
-import { Conversation } from '../types';
 
 export default function ChatScreen() {
   const {

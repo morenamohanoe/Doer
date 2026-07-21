@@ -57,20 +57,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 if (import.meta.env.DEV) {
-  console.log('Firebase Project ID:', firebaseConfig.projectId);
-  console.log('Firestore Database ID:', 'ai-studio-doer-5d4a57f4-3066-4fec-a081-9fae989dbe87');
-  
-  // Test connection status
-  import('firebase/firestore').then(({ doc, getDoc }) => {
-    getDoc(doc(db, 'system', 'status'))
-      .then(() => console.log('Firestore Connection Status: SUCCESS'))
-      .catch((err) => {
-        if (err.code === 'permission-denied') {
-          console.log('Firestore Connection Status: SUCCESS (Connection OK, Permission Denied expected)');
-        } else {
-          console.error('Firestore Connection Status: FAILED', err);
-        }
-      });
-  });
+  // Silent in browser console to prevent showing project/database configuration
 }
 

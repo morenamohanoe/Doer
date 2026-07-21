@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, ArrowRight, ShieldCheck, CheckCircle2, Shield, Briefcase, User, Star, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShieldCheck, CheckCircle2, Shield, Briefcase, Star } from 'lucide-react';
 
 const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
 
@@ -38,9 +38,6 @@ export default function Onboarding() {
     poaType: 'Municipal Utility Bill',
     poaIssuer: '',
   });
-
-  const [isProcessingCover, setIsProcessingCover] = useState(false);
-  const [isProcessingPortfolio, setIsProcessingPortfolio] = useState(false);
 
   // Populate state from current user / profile once loaded
   useEffect(() => {

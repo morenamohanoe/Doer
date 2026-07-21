@@ -31,6 +31,53 @@ async function startServer() {
     }
   });
 
+  // SEO robots.txt endpoint
+  app.get("/robots.txt", (req, res) => {
+    res.type("text/plain");
+    res.send(
+      `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: https://doer.co.za/sitemap.xml`
+    );
+  });
+
+  // SEO sitemap.xml endpoint
+  app.get("/sitemap.xml", (req, res) => {
+    res.type("application/xml");
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://doer.co.za/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://doer.co.za/?tab=home</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://doer.co.za/?tab=dashboard</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://doer.co.za/?tab=wallet</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://doer.co.za/?tab=profile</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+</urlset>`;
+    res.send(sitemap);
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

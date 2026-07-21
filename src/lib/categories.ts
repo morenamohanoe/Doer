@@ -1,18 +1,16 @@
 import { 
   collection, 
   addDoc, 
-  setDoc,
   query, 
   where, 
   getDocs, 
   serverTimestamp,
   doc,
   updateDoc,
-  deleteDoc,
-  orderBy
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { ServiceCategory, CategoryRequest } from '../types';
+import { ServiceCategory } from '../types';
 
 /**
  * Creates a brand new service category (Admin action).

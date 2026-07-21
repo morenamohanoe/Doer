@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Masonry from 'react-masonry-css';
 import { motion } from 'motion/react';
-import { ShieldCheck, Eye, ThumbsUp, Calendar } from 'lucide-react';
+import { ShieldCheck, Eye } from 'lucide-react';
 import { PortfolioProject, PortfolioImage } from '../types';
 import { useApp } from '../context/AppContext';
 import PortfolioLightbox from './PortfolioLightbox';

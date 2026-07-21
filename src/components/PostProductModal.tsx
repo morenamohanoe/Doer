@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion } from 'motion/react';
-import { X, CheckCircle2, Tag, ShoppingBag, Sparkles } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 import { submitCategoryRequest, addServiceCategory } from '../lib/categories';
 
 interface PostProductModalProps {

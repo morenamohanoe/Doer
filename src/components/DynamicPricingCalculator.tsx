@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calculator, HelpCircle, Info, Landmark, Route, Sparkles, Wrench } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calculator, Info, Route, Sparkles, Wrench } from 'lucide-react';
 
 interface DynamicPricingCalculatorProps {
   hourlyRate: number;

@@ -149,6 +149,12 @@ interface AppContextProps {
   failedPayments: FailedPayment[];
   addFailedPayment: (requestId: string, reason: string) => void;
   clearFailedPayment: (id: string) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  selectedCategory: string | null;
+  setSelectedCategory: (category: string | null) => void;
+  filterLocation: string;
+  setFilterLocation: (location: string) => void;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -242,6 +248,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user, isAdmin } = useAuth();
   const { profile, profileLoading } = useAuth(); // Get from AuthContext
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Search, category, and location filters for dynamic SEO and feeds
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [filterLocation, setFilterLocation] = useState('');
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -476,6 +487,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           locationName: profile.location || (profile.city ? `${profile.city}${profile.province ? `, ${profile.province}` : ''}` : prev.locationName),
           dateOfBirth: profile.dateOfBirth || '',
           gender: profile.gender || '',
+          role: profile.role || 'doer',
         } : {})
       }));
 
@@ -1552,14 +1564,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       status: 'active'
     };
 
-    console.log("--- FIRESTORE WRITE ATTEMPT ---");
-    console.log("Collection: services");
-    console.log(`Document Path: services/${serviceId}`);
-    console.log("Payload sent to Firestore:", JSON.stringify(newService, null, 2));
-
     try {
       await firestore.setDoc(firestore.doc(db, 'services', serviceId), newService);
-      console.log(`Successfully published service services/${serviceId}`);
       dispatchNotification('Service Published! 💼', `"${title}" is now live and visible to users.`, 'info');
       showToast(`Service "${title}" published! 💼`, 'success');
     } catch (err: any) {
@@ -1678,7 +1684,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let doerId = '';
     let doerName = '';
     let location = '';
-    let doerAvatar = '';
 
     if (type === 'service') {
       const srv = services.find((s) => s.id === entityId);
@@ -1688,10 +1693,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       doerId = srv.doerId;
       doerName = srv.doerName;
       location = srv.location;
-      
-      // Resolve avatar
-      const prof = roleProfiles.find(p => p.id === srv.doerId);
-      doerAvatar = srv.doerAvatar;
     } else {
       const prd = products.find((p) => p.id === entityId);
       if (!prd) return;
@@ -1700,7 +1701,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       doerId = prd.doerId;
       doerName = prd.doerName;
       location = currentUser.location;
-      doerAvatar = prd.doerAvatar;
     }
 
     if (doerId === currentUser.id) {
@@ -3218,7 +3218,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dismissSystemReminder,
         failedPayments,
         addFailedPayment,
-        clearFailedPayment
+        clearFailedPayment,
+        searchQuery,
+        setSearchQuery,
+        selectedCategory,
+        setSelectedCategory,
+        filterLocation,
+        setFilterLocation
       }}
     >
       {children}

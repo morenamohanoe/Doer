@@ -8,26 +8,13 @@ import { useApp } from '../context/AppContext';
 import { motion } from 'motion/react';
 import { MediaPreview } from './MediaPreview';
 import {
-  Wallet,
-  ShieldAlert,
   Clock,
-  CheckCircle,
-  AlertTriangle,
-  UserCheck,
-  TrendingUp,
-  Coins,
-  ChevronRight,
   MessageSquare,
   Sparkles,
-  ArrowUpRight,
-  Info,
   Shield,
   Briefcase,
   ShoppingBag,
-  User,
   Star,
-  Award,
-  Flame,
   Check,
   X,
   Pencil,
@@ -82,10 +69,7 @@ export default function Dashboard() {
     serviceRequests,
     updateRequestStatus,
     wallet,
-    topUpWallet,
     roleProfiles,
-    verificationRequests,
-    conversations,
     triggerSound,
     portfolioProjects,
     addPortfolioProject,
@@ -204,14 +188,6 @@ export default function Dashboard() {
   const filteredMyBookings = applyFiltersAndSorting(myBookings);
   const filteredDoerRequests = applyFiltersAndSorting(doerRequests);
   const filteredMySales = applyFiltersAndSorting(mySales);
-
-  // Admin global metrics (Calculated from true live state)
-  const totalVerifiedAccounts = 5 + verificationRequests.filter((v) => v.status === 'approved').length;
-  const escrowHoldingLedger = serviceRequests
-    .filter((r) => ['deposit_paid', 'in_progress', 'awaiting_approval', 'completed', 'disputed'].includes(r.status))
-    .reduce((sum, r) => sum + r.depositAmount, 0);
-
-  const disputes = serviceRequests.filter((r) => r.status === 'disputed');
 
   // Custom visual badge helper
   const renderStatusBadge = (status: EscrowStatusType) => {

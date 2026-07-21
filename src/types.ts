@@ -53,7 +53,7 @@ export interface User {
   updatedAt: string;
   locationId?: string;
   locationName?: string;
-  role: UserRoleType;
+  role: 'admin' | 'doer';
 }
 
 export interface DoerProfile {

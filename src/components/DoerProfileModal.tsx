@@ -21,13 +21,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  Calendar,
   Image as ImageIcon,
   Check,
-  TrendingUp,
-  Maximize2,
   Lock,
-  ChevronDown,
   Briefcase,
   FileText,
   ZoomIn,
@@ -36,12 +32,10 @@ import {
   Trash2,
   Info
 } from 'lucide-react';
-import { GeometricDivider } from './GeometricDivider';
 import { PortfolioProject, PortfolioImage } from '../types';
 import PortfolioMasonryGrid from './PortfolioMasonryGrid';
 import PostServiceModal from './PostServiceModal';
 import ConfirmationModal from './ConfirmationModal';
-import ProfileQRCodeModal from './ProfileQRCodeModal';
 
 interface DoerProfileModalProps {
   doerId: string; // ID of the role profile to display
@@ -52,15 +46,12 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
   const {
     roleProfiles,
     portfolioProjects,
-    portfolioImages,
     reviews,
     services,
     currentUser,
-    activeRole,
     serviceRequests,
     sendMessage,
     addPortfolioProject,
-    incrementProjectViews,
     triggerSound,
     showToast,
     isSavedItem,
@@ -89,11 +80,10 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
 
   // Tabs structure: About, Reviews, Portfolio, Services, Certifications (Optional), Contact
   const [activeTab, setActiveTab] = useState<'portfolio' | 'about' | 'reviews' | 'services' | 'certs' | 'contact'>('portfolio');
-  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
   // Lightbox Viewer State
   const [activeLightboxProject, setActiveLightboxProject] = useState<PortfolioProject | null>(null);
-  const [lightboxImages, setLightboxImages] = useState<PortfolioImage[]>([]);
+  const [lightboxImages] = useState<PortfolioImage[]>([]);
   const [currentLightboxIndex, setCurrentLightboxIndex] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -104,9 +94,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
   useEffect(() => {
     setZoomLevel(1);
   }, [currentLightboxIndex]);
-
-  // Before & After comparisons toggles (projectId -> 'before' | 'after')
-  const [beforeAfterToggle, setBeforeAfterToggle] = useState<{ [key: string]: 'before' | 'after' }>({});
 
   // Search & Filter state for Portfolio discoverability
   const [portfolioSearch, setPortfolioSearch] = useState('');
@@ -128,7 +115,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
   const [reviewSortOrder, setReviewSortOrder] = useState<'newest' | 'highest' | 'lowest'>('newest');
   const [newProjBefore, setNewProjBefore] = useState('');
   const [newProjAfter, setNewProjAfter] = useState('');
-  const [newProjFeedback, setNewProjFeedback] = useState('');
   const [newProjExtraImages, setNewProjExtraImages] = useState<{ imageUrl: string; caption: string }[]>([
     { imageUrl: '', caption: '' }
   ]);
@@ -148,64 +134,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
       setNewProjCategory(serviceCategories[0].id);
     }
   }, [serviceCategories, newProjCategory]);
-
-  // Handle opening Lightbox
-  const handleOpenLightbox = (project: PortfolioProject) => {
-    triggerSound('click');
-    incrementProjectViews(project.id);
-    setActiveLightboxProject(project);
-    
-    // Find associated images
-    const projectGallery = portfolioImages.filter((img) => img.projectId === project.id);
-    
-    // Build a complete array including cover, before, after, and gallery images
-    const compositeList: PortfolioImage[] = [];
-    
-    // 1. Cover Image
-    compositeList.push({
-      id: `cover-${project.id}`,
-      projectId: project.id,
-      imageUrl: project.cover_image,
-      thumbnailUrl: project.cover_image,
-      caption: 'Project Cover Photo',
-      sortOrder: 0
-    });
-
-    // 2. Before Image (if exists)
-    if (project.beforeImage) {
-      compositeList.push({
-        id: `before-${project.id}`,
-        projectId: project.id,
-        imageUrl: project.beforeImage,
-        thumbnailUrl: project.beforeImage,
-        caption: 'BEFORE Transformation',
-        sortOrder: 1
-      });
-    }
-
-    // 3. After Image (if exists)
-    if (project.afterImage) {
-      compositeList.push({
-        id: `after-${project.id}`,
-        projectId: project.id,
-        imageUrl: project.afterImage,
-        thumbnailUrl: project.afterImage,
-        caption: 'AFTER Completion',
-        sortOrder: 2
-      });
-    }
-
-    // 4. Other gallery images
-    projectGallery.forEach((img, idx) => {
-      compositeList.push({
-        ...img,
-        sortOrder: compositeList.length
-      });
-    });
-
-    setLightboxImages(compositeList);
-    setCurrentLightboxIndex(0);
-  };
 
   // Navigate lightbox images
   const handlePrevImage = (e: React.MouseEvent) => {
@@ -242,15 +170,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
     const conversationId = `conv-${profile.id}`;
     // If it's the first time, we can send a follow up or just open the view
     sendMessage(conversationId, `Hello! I'm following up on our accepted request for "${acceptedRequest.title}".`);
-  };
-
-  // Toggle Before / After on card
-  const toggleBeforeAfter = (projectId: string, state: 'before' | 'after') => {
-    triggerSound('click');
-    setBeforeAfterToggle((prev) => ({
-      ...prev,
-      [projectId]: state
-    }));
   };
 
   // Fetch portfolio projects for this Doer
@@ -291,68 +210,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
            ['accepted', 'deposit_paid', 'in_progress', 'awaiting_approval', 'completed', 'disputed'].includes(r.status) &&
            !r.isProductOrder
   ).length;
-
-  const profilePortfolioItems = (() => {
-    // 1. Check if there's a structured portfolio array on the profile document
-    if (Array.isArray((profile as any).portfolio)) {
-      return (profile as any).portfolio;
-    }
-    // 2. Fallback to mapping portfolioImages
-    if (Array.isArray(profile.portfolioImages) && profile.portfolioImages.length > 0) {
-      return profile.portfolioImages.map((imgUrl, idx) => {
-        // Find if there's a corresponding description in portfolioDescriptions
-        const desc = Array.isArray((profile as any).portfolioDescriptions)
-          ? (profile as any).portfolioDescriptions[idx]
-          : `High-quality sample of my custom ${profile.occupation || 'doer'} work showing attention to detail, professional finishing, and built-to-last standards.`;
-        
-        const title = Array.isArray((profile as any).portfolioTitles)
-          ? (profile as any).portfolioTitles[idx]
-          : `Portfolio Work Sample #${idx + 1}`;
-          
-        return {
-          imageUrl: imgUrl,
-          title,
-          description: desc,
-        };
-      });
-    }
-    // 3. If empty, return a default set of high-res placeholder portfolio items based on their category
-    const defaultImages = profile.category_id === 'plumbing' || (profile as any).category === 'plumbing' || profile.id === 'doer-1'
-      ? [
-          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=800&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1542013936693-8848e5742383?w=800&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800&fit=crop&q=80'
-        ]
-      : profile.category_id === 'gardening' || (profile as any).category === 'gardening' || profile.id === 'doer-2'
-      ? [
-          'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=800&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1558905611-19799258a383?w=800&fit=crop&q=80'
-        ]
-      : [
-          'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?w=800&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=800&fit=crop&q=80'
-        ];
-
-    const defaultDescs = [
-      `Premium ${profile.occupation || 'professional'} project completed with high-grade materials and industry-standard processes.`,
-      `Advanced repair and installation showcasing precision alignment, cleanup, and functional testing.`,
-      `Custom-tailored layout completed for residential client with full compliance and warranty support.`
-    ];
-
-    const defaultTitles = [
-      `Main Service Area Upgrade`,
-      `Diagnostic & Restoration Work`,
-      `Custom Client Installation`
-    ];
-
-    return defaultImages.map((imgUrl, idx) => ({
-      imageUrl: imgUrl,
-      title: defaultTitles[idx],
-      description: defaultDescs[idx]
-    }));
-  })();
 
   const dynamicCompletionRate = dynamicTotalJobsRequested > 0
     ? Math.round((dynamicCompletedJobsCount / dynamicTotalJobsRequested) * 100)
@@ -489,7 +346,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
     setNewProjCover('');
     setNewProjBefore('');
     setNewProjAfter('');
-    setNewProjFeedback('');
     setNewProjExtraImages([{ imageUrl: '', caption: '' }]);
     setShowAddProjectForm(false);
   };
@@ -506,16 +362,6 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
       >
         {/* Top Header Controls */}
         <div className="absolute top-4 right-4 z-20 flex gap-2">
-          <button
-            onClick={() => {
-              triggerSound('click');
-              setIsQRModalOpen(true);
-            }}
-            className="p-2.5 bg-slate-900/40 hover:bg-slate-900/60 text-white rounded-full transition-all shadow-md backdrop-blur-xs flex items-center justify-center group cursor-pointer"
-            title="Show QR Code"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-white"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
-          </button>
           <button
             onClick={() => {
               triggerSound('click');

@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useRole } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Home,
@@ -12,13 +13,10 @@ import {
   BarChart3,
   User,
   Plus,
-  Bell,
   X,
-  Sparkles,
   Shield,
   Briefcase,
-  ShoppingBag,
-  Info
+  ShoppingBag
 } from 'lucide-react';
 import PostServiceModal from './PostServiceModal';
 import PostProductModal from './PostProductModal';
@@ -30,10 +28,9 @@ interface NavigationProps {
 
 export default function Navigation({ currentTab, setTab }: NavigationProps) {
   const {
-    activeRole,
-    isAdmin,
     triggerSound
   } = useApp();
+  const { isAdmin: isRoleAdmin } = useRole();
 
   const [isPostSheetOpen, setIsPostSheetOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -119,7 +116,7 @@ export default function Navigation({ currentTab, setTab }: NavigationProps) {
         </button>
 
         {/* TAB 6: ADMIN (Conditional) */}
-        {isAdmin && (
+        {isRoleAdmin && (
           <button
             onClick={() => handleTabChange('admin')}
             className={`flex flex-col items-center gap-0.5 w-12 transition-all ${

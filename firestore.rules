@@ -71,6 +71,8 @@
           && (!('trustScore' in data) || (data.trustScore is number))
           && (!('verificationStatus' in data) || (data.verificationStatus is string && data.verificationStatus.size() <= 50))
           && (!('isAdmin' in data) || (data.isAdmin == true || data.isAdmin == false))
+          && (!('role' in data) || (data.role == 'admin' || data.role == 'doer'))
+          && (!('roleInitialized' in data) || (data.roleInitialized is bool))
           && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp || data.createdAt is number))
           && (!('updatedAt' in data) || (data.updatedAt is string || data.updatedAt is timestamp || data.updatedAt is number));
       }
@@ -206,6 +208,11 @@
       match /service_categories/{categoryId} {
         allow read: if true;
         allow write: if isAdmin();
+      }
+
+      // --- CATEGORIES ---
+      match /categories/{categoryId} {
+        allow read, write: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
       }
 
       // --- CATEGORY REQUESTS ---
@@ -383,7 +390,10 @@
                         && isValidUser(request.resource.data)
                         && (request.resource.data.uid == resource.data.uid || !('uid' in resource.data))
                         && (request.resource.data.email == resource.data.email || !('email' in resource.data))
-                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'trustScore', 'verificationLevel', 'averageRating', 'completedJobs', 'walletBalance', 'totalEarnings'])
+                        && (
+                          (request.auth.token.email == 'morenamohanoe@gmail.com' && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'trustScore', 'verificationLevel', 'averageRating', 'completedJobs', 'walletBalance', 'totalEarnings'])) ||
+                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roleInitialized', 'isAdmin', 'trustScore', 'verificationLevel', 'averageRating', 'completedJobs', 'walletBalance', 'totalEarnings'])
+                        )
                         && (
                           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationStatus']) ||
                           (!('verificationStatus' in resource.data) && (request.resource.data.verificationStatus == 'unverified' || request.resource.data.verificationStatus == 'pending'))

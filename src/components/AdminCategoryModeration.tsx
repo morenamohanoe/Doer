@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import RoleGuard from './auth/RoleGuard';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Check, 
   X, 
   Shield, 
   Search, 
-  Filter, 
   Trash2, 
-  CheckCircle, 
   Plus, 
   Edit, 
   Archive, 
@@ -19,15 +18,12 @@ import {
   FolderPlus, 
   Grid, 
   ListOrdered, 
-  Info,
-  HelpCircle,
   ThumbsDown,
   Sparkles
 } from 'lucide-react';
 import { 
   addServiceCategory, 
   updateServiceCategory, 
-  archiveCategory, 
   deleteCategory, 
   approveCategoryRequest, 
   rejectCategoryRequest 
@@ -48,7 +44,7 @@ const PRESET_GRADIENTS = [
 ];
 
 export default function AdminCategoryModeration() {
-  const { serviceCategories, categoryRequests, triggerSound, showToast, currentUser, isAdmin } = useApp();
+  const { serviceCategories, categoryRequests, triggerSound, showToast, currentUser } = useApp();
   
   // Search and Filter State
   const [search, setSearch] = useState('');
@@ -84,16 +80,6 @@ export default function AdminCategoryModeration() {
   });
 
   const [activeTab, setActiveTab] = useState<'manage' | 'requests' | 'fees'>('manage');
-  
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center p-6 text-center">
-        <Shield className="w-12 h-12 text-slate-300 mb-4" />
-        <h2 className="text-lg font-black text-slate-800">Access Denied</h2>
-        <p className="text-xs text-slate-500 font-medium mt-1">You do not have permission to access the Category Command Center.</p>
-      </div>
-    );
-  }
   
   // Manage Category Filtering
   const filteredCategories = serviceCategories.filter(cat => {
@@ -272,7 +258,8 @@ export default function AdminCategoryModeration() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <RoleGuard allowedRoles={['admin']}>
+      <div className="flex flex-col h-full bg-slate-50 relative">
       
       {/* Header section */}
       <div className="px-6 pt-6 pb-4 bg-white border-b border-slate-100 shadow-sm">
@@ -888,6 +875,7 @@ export default function AdminCategoryModeration() {
         message={confirmModal.message}
       />
 
-    </div>
+      </div>
+    </RoleGuard>
   );
 }

@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, CheckCircle2, MapPin, Tag, Sparkles, Search, Plus, Loader2, Trash2, Upload, Image } from 'lucide-react';
+import { X, CheckCircle2, Sparkles, Search, Plus, Loader2, Trash2, Upload } from 'lucide-react';
 import { addServiceCategory, submitCategoryRequest } from '../lib/categories';
 import { Service } from '../types';
 
@@ -61,17 +61,6 @@ export default function PostServiceModal({ isOpen, onClose, editingService }: Po
   }, [editingService, isOpen, serviceCategories]);
 
   const [error, setError] = useState('');
-
-  // Helper functions for media arrays
-  const isValidUrl = (url: string) => {
-    if (url.startsWith('data:')) return true;
-    try {
-      new URL(url);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
 
   const handleAddImageUrl = () => {
     setImageUrls([...imageUrls, '']);

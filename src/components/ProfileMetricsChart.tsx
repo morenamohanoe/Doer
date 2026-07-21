@@ -4,17 +4,15 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  BarChart,
   Bar,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend,
   ComposedChart,
   Line
 } from 'recharts';
-import { TrendingUp, BarChart3, Star, Percent } from 'lucide-react';
+import { TrendingUp, BarChart3, Star } from 'lucide-react';
 import { ServiceRequest } from '../types';
 
 interface ProfileMetricsChartProps {

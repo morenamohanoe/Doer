@@ -21,6 +21,18 @@
       ]
     },
     "allowImportingTsExtensions": true,
+    "noUnusedLocals": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "src/**/*",
+    "server.ts",
+    "vite.config.ts",
+    "src/vite-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "app"
+  ]
 }

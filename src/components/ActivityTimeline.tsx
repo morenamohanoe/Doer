@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Clock, AlertCircle, RotateCcw, ShieldCheck, User } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ServiceRequest } from '../types';
 
 interface ActivityTimelineProps {

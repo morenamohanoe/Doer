@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShieldCheck, CheckCircle2, Circle, Smartphone, Award, HelpCircle, Briefcase, FileCheck, Check } from 'lucide-react';
+import { X, ShieldCheck, Smartphone, Award, HelpCircle, Briefcase, Check } from 'lucide-react';
 import { User } from '../types';
 
 interface VerificationDetailsModalProps {

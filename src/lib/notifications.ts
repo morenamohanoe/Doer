@@ -1,6 +1,5 @@
 import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { db } from './firebase';
-import { Notification } from '../types';
 
 export const createNotification = async (
   userId: string,

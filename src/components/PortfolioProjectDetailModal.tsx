@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, Eye, Star, ShieldCheck, Tag, Quote, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { X, Calendar, Eye, Star, ShieldCheck, Quote, ArrowRight, Image as ImageIcon } from 'lucide-react';
 import { PortfolioProject, PortfolioImage } from '../types';
 import { useApp } from '../context/AppContext';
 

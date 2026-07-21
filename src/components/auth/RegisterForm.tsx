@@ -3,9 +3,7 @@ import { motion } from 'motion/react';
 import { auth, db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { Upload, ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff } from 'lucide-react';
-
-const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
+import { ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 interface RegisterFormProps {
   onBack: () => void;
@@ -39,17 +37,6 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
   });
 
   const [customProfileUrl, setCustomProfileUrl] = useState('');
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCustomProfileUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const getActiveProfilePreview = () => {
     return customProfileUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
@@ -130,7 +117,8 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         profileCompleted: false, // Onboarding needed
-        role: 'doer'
+        role: formData.email.toLowerCase().trim() === 'morenamohanoe@gmail.com' ? 'admin' : 'doer',
+        roleInitialized: formData.email.toLowerCase().trim() === 'morenamohanoe@gmail.com' ? true : false
       };
 
       const cleanUserPayload: Record<string, any> = {};
@@ -342,14 +330,5 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
         </button>
       </form>
     </div>
-  );
-}
-
-function UserIcon(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
   );
 }

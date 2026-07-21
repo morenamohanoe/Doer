@@ -19,19 +19,15 @@ import LoadingScreen from './components/LoadingScreen';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import Navigation from './components/Navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { NotificationSettings } from './types';
+import SEO from './components/SEO';
+import { NotificationSettings, ServiceCategory } from './types';
 import {
   Sparkles,
   RefreshCw,
   Clock,
   CheckCircle,
   Briefcase,
-  ShoppingBag,
-  User,
   Shield,
-  ArrowRightLeft,
-  Flame,
-  Award,
   ChevronDown,
   AlertCircle,
   AlertTriangle,
@@ -43,7 +39,6 @@ import {
   MessageSquare,
   CreditCard,
   Heart,
-  MapPin,
   Star,
 } from 'lucide-react';
 
@@ -149,7 +144,6 @@ function SystemRemindersContainer() {
 
 function AppContent() {
   const {
-    activeRole,
     currentUser,
     roleProfiles,
     triggerSound,
@@ -160,7 +154,6 @@ function AppContent() {
     showToast,
     profile,
     loadingProfile,
-    isOnboarded,
     unreadCount,
     markAsRead,
     notificationSettings,
@@ -177,7 +170,10 @@ function AppContent() {
     serviceRequests,
     failedPayments = [],
     clearFailedPayment,
-    topUpWallet
+    topUpWallet,
+    searchQuery,
+    selectedCategory,
+    filterLocation
   } = useApp();
   const { user, loading: authLoading } = useAuth();
   const [currentTab, setTab] = useState('home');
@@ -311,8 +307,6 @@ function AppContent() {
     return <Onboarding />;
   }
 
-  const activeProfile = roleProfiles.find((p) => p.role === activeRole) || roleProfiles[0];
-
   const filteredNotifications = notifications?.filter(n => {
     // Apply Global User Preferences first
     if (n.type === 'booking' && !notificationSettings.jobUpdates) return false;
@@ -437,8 +431,76 @@ function AppContent() {
     return null;
   };
 
+  const getSeoProps = () => {
+    switch (currentTab) {
+      case 'home': {
+        const activeCatObj = serviceCategories.find((c: ServiceCategory) => c.id === selectedCategory || c.name === selectedCategory);
+        const categoryName = activeCatObj ? activeCatObj.name : selectedCategory;
+
+        if (categoryName || searchQuery || filterLocation) {
+          const categoryText = categoryName 
+            ? `${categoryName}` 
+            : (searchQuery ? `${searchQuery}` : 'On-Demand Services');
+          
+          const locationText = filterLocation 
+            ? ` in ${filterLocation}` 
+            : ' across South Africa';
+
+          return {
+            title: `${categoryText} Services${locationText} | DOER Marketplace`,
+            description: `Connect with trusted ${categoryText.toLowerCase()} professionals${locationText} on DOER. View ratings, completed portfolio projects, and book local services to support local livelihoods.`,
+            keywords: `DOER, ${categoryText.toLowerCase()}${filterLocation ? `, ${categoryText.toLowerCase()} ${filterLocation.toLowerCase()}` : ''}, local services, handymen south africa, earn income, skill marketplace`
+          };
+        }
+
+        return {
+          title: "DOER | South Africa's On-Demand Services & Skills Marketplace",
+          description: "DOER helps South Africans market skills, sell products, generate income, and connect with trusted customers. Helping people get things done while helping others earn a living.",
+          keywords: "DOER, local services, handyman south africa, earn income, market skills, sell products online, find local doer, trustworthy help, johannesburg freelancers"
+        };
+      }
+      case 'dashboard':
+        return {
+          title: "My Work & Booking Milestones Dashboard | DOER",
+          description: "Track your active jobs, ongoing customer bookings, and product orders in real-time. Manage your goals and milestones smoothly.",
+          keywords: "DOER dashboard, tracking local jobs, direct service milestones, freelance work status, South Africa services"
+        };
+      case 'conversations':
+        return {
+          title: "Direct Secure Messages & Freelance Chat | DOER",
+          description: "Chat directly with verified service providers or customers. Discuss requirements, negotiate prices, and schedule services smoothly.",
+          keywords: "DOER chat, secure service messages, contact local providers, direct customer chat, freelance conversation"
+        };
+      case 'profile':
+        return {
+          title: "Professional Provider Portfolio & Customer Profile | DOER",
+          description: "Set up your verified provider portfolio, showcase your skills or products, view trust scores, and manage your DOER profile settings.",
+          keywords: "DOER profile, trust score, skills portfolio, service catalog, product shop, South African freelance resume"
+        };
+      case 'admin':
+        return {
+          title: "System Administration & Category Moderation Console | DOER",
+          description: "DOER Admin system panel for service approvals, system commission cut metrics, and provider validations.",
+          keywords: "DOER admin, system cut configuration, provider verification, services category moderation"
+        };
+      case 'wallet':
+        return {
+          title: "My Secure Income Wallet & Direct Bank Withdrawals | DOER",
+          description: "Manage your secure deposits, withdraw earned income directly to major South African banks, and view transaction history.",
+          keywords: "DOER wallet, withdraw earnings, South African banks EFT, secure payment escrow, peer-to-peer transfers"
+        };
+      default:
+        return {
+          title: "DOER | South Africa's On-Demand Services & Skills Marketplace",
+          description: "Helping people get things done while helping others earn a living. Market skills, sell products, and find trusted help.",
+          keywords: "DOER, doer app, local services, South Africa freelance"
+        };
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white relative overflow-hidden" id="app-content-root">
+      <SEO {...getSeoProps()} />
       <SystemRemindersContainer />
       <ConnectivityBanner />
       

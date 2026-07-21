@@ -7,23 +7,14 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  User,
   ShieldCheck,
   Award,
-  Wallet,
-  ArrowUpRight,
-  TrendingUp,
   RefreshCw,
   MapPin,
   Check,
   ChevronRight,
-  Building,
-  CreditCard,
   Phone,
   Mail,
-  Flame,
-  ChevronDown,
-  Sparkles,
   LogOut,
   Camera,
   X,
@@ -34,10 +25,7 @@ import {
   Video,
   ExternalLink,
   Smile,
-  Star,
-  FileText,
-  History,
-  QrCode
+  History
 } from 'lucide-react';
 import DoerProfileModal from './DoerProfileModal';
 import PullToRefresh from './PullToRefresh';
@@ -55,20 +43,16 @@ export default function ProfileScreen() {
     currentUser,
     roleProfiles,
     activeRole,
-    wallet,
     requestWithdrawal,
     submitVerification,
     verificationRequests,
     roleProgressions,
-    resetAllData,
     triggerSound,
     savedItems,
     toggleSaveItem,
-    isSavedItem,
     services,
     products,
     showToast,
-    updateUserAvatar,
     reviews,
     portfolioProjects,
     serviceRequests
@@ -269,6 +253,7 @@ export default function ProfileScreen() {
     dateOfBirth: currentUser?.dateOfBirth || '',
     gender: currentUser?.gender || profile?.gender || '',
     verificationStatus: currentUser?.verificationStatus || 'unverified',
+    role: currentUser?.role || 'doer',
     bio: profile?.bio || '',
     categories: profile?.categories?.join(', ') || '',
     highestEducation: profile?.highestEducation || profile?.education || '',
@@ -285,8 +270,7 @@ export default function ProfileScreen() {
   const [editUseCustomCoverUrl, setEditUseCustomCoverUrl] = useState(!!profile?.coverImageUrl);
   const [savingProfile, setSavingProfile] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
-  const [cropModalData, setCropModalData] = useState<{ isOpen: boolean; imageSrc: string; type: 'profile' | 'cover', aspectRatio: number }>({ isOpen: false, imageSrc: '', type: 'profile', aspectRatio: 1 });
-  const [isProcessingMedia, setIsProcessingMedia] = useState({ profile: false, cover: false });
+  const isProcessingMedia = { profile: false, cover: false };
 
   // Sync edits when context loads
   React.useEffect(() => {
@@ -301,6 +285,7 @@ export default function ProfileScreen() {
         dateOfBirth: currentUser.dateOfBirth || prev.dateOfBirth || '',
         gender: currentUser.gender || prev.gender || '',
         verificationStatus: currentUser.verificationStatus || prev.verificationStatus || 'unverified',
+        role: currentUser.role || prev.role || 'doer',
       }));
     }
     if (profile) {
@@ -809,14 +794,29 @@ export default function ProfileScreen() {
                       </select>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase">Verification Status</label>
-                    <select name="verificationStatus" value={editFields.verificationStatus} onChange={handleEditChange} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-semibold">
-                      <option value="unverified">Unverified</option>
-                      <option value="phone_verified">Phone Verified</option>
-                      <option value="identity_verified">Identity Verified</option>
-                      <option value="business_verified">Business Verified</option>
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Verification Status</label>
+                      <select name="verificationStatus" value={editFields.verificationStatus} onChange={handleEditChange} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-semibold animate-none">
+                        <option value="unverified">Unverified</option>
+                        <option value="phone_verified">Phone Verified</option>
+                        <option value="identity_verified">Identity Verified</option>
+                        <option value="business_verified">Business Verified</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                        System Role
+                      </label>
+                      <div className={`p-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 h-[34px] capitalize ${
+                        editFields.role === 'admin' 
+                          ? 'border-amber-200 bg-amber-50 text-amber-700' 
+                          : 'border-slate-200 bg-slate-50 text-slate-700'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${editFields.role === 'admin' ? 'bg-amber-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                        {editFields.role === 'admin' ? 'Admin' : 'Doer'}
+                      </div>
+                    </div>
                   </div>
                 </div>
 

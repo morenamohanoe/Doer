@@ -3,11 +3,74 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    
+    <!-- Primary SEO Metadata -->
+    <title>DOER | South Africa's On-Demand Services & Skills Marketplace</title>
+    <meta name="description" content="DOER connects South Africans with trusted local service providers and product sellers. Earn an income, market your skills, or find verified Doers for any job. Helping people get things done while helping others earn a living." />
+    <meta name="keywords" content="DOER, doer south africa, local services, handymen south africa, freelance marketplace, sell products local, earn income south africa, skill marketing, verified service providers, johannesburg, cape town, durban, trust platform" />
+    <meta name="author" content="DOER South Africa" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#4f46e5" />
+    <link rel="canonical" href="https://doer.co.za" />
+
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://doer.co.za" />
+    <meta property="og:title" content="DOER | South Africa's On-Demand Services & Skills Marketplace" />
+    <meta property="og:description" content="Helping people get things done while helping others earn a living. Connect with verified service providers and sellers across South Africa." />
+    <meta property="og:image" content="https://images.unsplash.com/photo-1521791136368-1a46827d0adb?w=1200&h=630&fit=crop&q=80" />
+    <meta property="og:site_name" content="DOER" />
+    <meta property="og:locale" content="en_ZA" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DOER | On-Demand Services & Local Marketplace SA" />
+    <meta name="twitter:description" content="Market your skills, sell products, and hire verified local service providers in South Africa." />
+    <meta name="twitter:image" content="https://images.unsplash.com/photo-1521791136368-1a46827d0adb?w=1200&h=630&fit=crop&q=80" />
+
+    <!-- Structured Data (JSON-LD) for Search Engines -->
+    <script type="application/ld+json" id="ld-website">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "DOER",
+        "url": "https://doer.co.za",
+        "description": "DOER is a South African on-demand services and marketplace platform designed to help people generate income, market skills, and connect with trusted customers.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://doer.co.za/?search={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
+    <script type="application/ld+json" id="ld-organization">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "DOER",
+        "url": "https://doer.co.za",
+        "logo": "https://images.unsplash.com/photo-1521791136368-1a46827d0adb?w=400&fit=crop&q=80",
+        "sameAs": [
+          "https://facebook.com/doerapp",
+          "https://twitter.com/doerapp",
+          "https://instagram.com/doerapp"
+        ],
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "telephone": "+27-11-555-0199",
+          "contactType": "customer support",
+          "areaServed": "ZA",
+          "availableLanguage": "English"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

@@ -1,6 +1,6 @@
 {
-  "name": "VayaStay",
-  "description": "A clean, minimal, visually stunning service-on-demand marketplace with dual-release escrow and smart South African resilience built in.",
+  "name": "DOER",
+  "description": "DOER is a South African on-demand services and marketplace platform designed to help people generate income, market skills, sell products, and connect with trusted customers.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
