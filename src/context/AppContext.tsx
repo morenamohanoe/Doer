@@ -907,8 +907,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    const isUserAdmin = currentUser?.role === 'admin' && !!user;
-    if (!isUserAdmin) {
+    if (!isAdmin || !user) {
       setCategoryRequests([]);
       return;
     }
@@ -923,7 +922,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       handleFirestoreError(error, OperationType.GET, 'category_requests');
     });
     return unsubscribe;
-  }, [user, currentUser?.role]);
+  }, [user, isAdmin]);
 
   const [reviews, setReviews] = useState<Review[]>([]);
   

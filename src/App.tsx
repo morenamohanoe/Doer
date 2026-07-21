@@ -300,19 +300,6 @@ function AppContent() {
     lastFailedCountRef.current = failedPayments ? failedPayments.length : 0;
   }, [failedPayments, triggerSound]);
 
-  if (authLoading || loadingProfile) {
-    return <LoadingScreen />;
-  }
-
-  if (!user) {
-    return <Welcome />;
-  }
-
-  // Only route to onboarding if profile is explicitly not completed
-  if (!profile || !profile.profileCompleted) {
-    return <Onboarding />;
-  }
-
   const filteredNotifications = React.useMemo(() => {
     return notifications?.filter(n => {
     // Apply Global User Preferences first
@@ -383,6 +370,21 @@ function AppContent() {
       }
     }
   }, [markAsRead, triggerSound, setTab]);
+
+  if (authLoading || loadingProfile) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Welcome />;
+  }
+
+  // Only route to onboarding if profile is explicitly not completed
+  if (!profile || !profile.profileCompleted) {
+    return <Onboarding />;
+  }
+
+
 
   const getSavedItemDetails = (item: any) => {
     if (item.itemType === 'service') {
