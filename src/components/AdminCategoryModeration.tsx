@@ -19,7 +19,8 @@ import {
   Grid, 
   ListOrdered, 
   ThumbsDown,
-  Sparkles
+  Sparkles,
+  BarChart3
 } from 'lucide-react';
 import { 
   addServiceCategory, 
@@ -31,6 +32,7 @@ import {
 import CategoryIcon, { POPULAR_ICONS } from './CategoryIcon';
 import ConfirmationModal from './ConfirmationModal';
 import GlobalSystemCutSettings from './admin/GlobalSystemCutSettings';
+import { AdminAnalyticsDashboard } from './admin/analytics/AdminAnalyticsDashboard';
 import { logError } from '../lib/logger';
 
 const PRESET_GRADIENTS = [
@@ -80,7 +82,7 @@ export default function AdminCategoryModeration() {
     onConfirm: () => {},
   });
 
-  const [activeTab, setActiveTab] = useState<'manage' | 'requests' | 'fees'>('manage');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'manage' | 'requests' | 'fees'>('analytics');
   
   // Manage Category Filtering
   const filteredCategories = serviceCategories.filter(cat => {
@@ -289,10 +291,25 @@ export default function AdminCategoryModeration() {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex gap-4 mt-6 border-b border-slate-100">
+        <div className="flex gap-4 mt-6 border-b border-slate-100 overflow-x-auto">
+          <button
+            onClick={() => { setActiveTab('analytics'); triggerSound('click'); }}
+            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'analytics' 
+                ? 'text-brand' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-brand" />
+            Analytics & BI Dashboard
+            {activeTab === 'analytics' && (
+              <motion.div layoutId="adminTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full" />
+            )}
+          </button>
+
           <button
             onClick={() => { setActiveTab('manage'); triggerSound('click'); }}
-            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative ${
+            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative shrink-0 ${
               activeTab === 'manage' 
                 ? 'text-brand' 
                 : 'text-slate-400 hover:text-slate-600'
@@ -306,7 +323,7 @@ export default function AdminCategoryModeration() {
           
           <button
             onClick={() => { setActiveTab('requests'); triggerSound('click'); }}
-            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 ${
+            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 shrink-0 ${
               activeTab === 'requests' 
                 ? 'text-brand' 
                 : 'text-slate-400 hover:text-slate-600'
@@ -324,7 +341,7 @@ export default function AdminCategoryModeration() {
 
           <button
             onClick={() => { setActiveTab('fees'); triggerSound('click'); }}
-            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 ${
+            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 shrink-0 ${
               activeTab === 'fees' 
                 ? 'text-brand' 
                 : 'text-slate-400 hover:text-slate-600'
@@ -338,58 +355,70 @@ export default function AdminCategoryModeration() {
         </div>
 
         {/* Global Search & Filters bar */}
-        <div className="flex flex-col sm:flex-row gap-3 mt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder={activeTab === 'manage' ? "Search dynamic categories..." : "Search user category requests..."}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-150 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand text-xs font-bold transition-all"
-            />
-          </div>
+        {(activeTab === 'manage' || activeTab === 'requests') && (
+          <div className="flex flex-col sm:flex-row gap-3 mt-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder={activeTab === 'manage' ? "Search dynamic categories..." : "Search user category requests..."}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-150 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand text-xs font-bold transition-all"
+              />
+            </div>
 
-          {activeTab === 'manage' ? (
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start sm:self-auto">
-              {(['all', 'approved', 'archived'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                    statusFilter === f 
-                      ? 'bg-white text-slate-800 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start sm:self-auto">
-              {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setRequestFilter(f)}
-                  className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                    requestFilter === f 
-                      ? 'bg-white text-slate-800 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            {activeTab === 'manage' ? (
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start sm:self-auto">
+                {(['all', 'approved', 'archived'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setStatusFilter(f)}
+                    className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                      statusFilter === f 
+                        ? 'bg-white text-slate-800 shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl shrink-0 self-start sm:self-auto">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setRequestFilter(f)}
+                    className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                      requestFilter === f 
+                        ? 'bg-white text-slate-800 shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main content grid */}
-      <div className="flex-1 overflow-y-auto p-6 pb-24">
-        <AnimatePresence mode="wait">
-          {activeTab === 'manage' ? (
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24">
+        <div className="max-w-7xl mx-auto w-full">
+          <AnimatePresence mode="wait">
+            {activeTab === 'analytics' ? (
+              <motion.div
+                key="analytics-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <AdminAnalyticsDashboard />
+              </motion.div>
+          ) : activeTab === 'manage' ? (
             <motion.div
               key="manage-tab"
               initial={{ opacity: 0, y: 10 }}
@@ -568,6 +597,7 @@ export default function AdminCategoryModeration() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </div>
 
       {/* --- FORM MODAL FOR CREATE / EDIT CATEGORY --- */}

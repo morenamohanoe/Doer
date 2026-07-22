@@ -648,11 +648,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             userId: user.uid,
             uid: user.uid,
             displayName: profile ? `${profile.firstName} ${profile.lastName}`.trim() : 'Current User',
-            balance: data.balance || 0,
-            escrowBalance: data.escrowBalance || 0,
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
+            balance: typeof data.balance === 'number' ? data.balance : (Number(data.balance) || 0),
+            escrowBalance: typeof data.escrowBalance === 'number' ? data.escrowBalance : (Number(data.escrowBalance) || 0),
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || new Date().toISOString()
           });
+        } else {
+          firestore.setDoc(firestore.doc(db, 'wallets', user.uid), {
+            userId: user.uid,
+            balance: 0,
+            escrowBalance: 0,
+            createdAt: firestore.serverTimestamp(),
+            updatedAt: firestore.serverTimestamp()
+          }, { merge: true }).catch(logError);
         }
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, `wallets/${user.uid}`);
@@ -2242,6 +2250,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       if (currentUser?.id) {
         firestore.setDoc(firestore.doc(db, 'wallets', currentUser.id), {
+          userId: currentUser.id,
           balance: newBalance,
           escrowBalance: newEscrow,
           updatedAt: firestore.serverTimestamp()
@@ -2486,6 +2495,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     try {
       await firestore.setDoc(firestore.doc(db, 'wallets', currentUser.id), {
+        userId: currentUser.id,
         balance: newBalance,
         updatedAt: firestore.serverTimestamp()
       }, { merge: true });
@@ -2630,6 +2640,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           createdAt: firestore.serverTimestamp()
         });
         batch.set(firestore.doc(db, 'wallets', currentUser.id), {
+          userId: currentUser.id,
           balance: newBalance,
           updatedAt: firestore.serverTimestamp()
         }, { merge: true });
