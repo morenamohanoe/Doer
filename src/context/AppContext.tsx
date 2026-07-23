@@ -112,8 +112,9 @@ interface AppContextProps {
   sendMessage: (conversationId: string, text: string, imageUrl?: string, systemStatus?: EscrowStatusType) => void;
   setTypingStatus: (conversationId: string, isTyping: boolean) => void;
   markMessagesAsRead: (conversationId: string) => Promise<void>;
-  addReview: (targetId: string, rating: number, comment: string, customId?: string) => void;
-  requestWithdrawal: (amount: number, bankName: string, accountNumber: string) => boolean;
+  addReview: (targetId: string, rating: number, comment: string, customId?: string, bookingId?: string) => void;
+  addReviewReply: (reviewId: string, replyText: string) => Promise<void>;
+  requestWithdrawal: (amount: number, bankName: string, accountNumber: string, accountHolderName: string, branchCode: string) => boolean;
   topUpWallet: (amount: number) => void;
   transferFunds: (recipientId: string, recipientName: string, amount: number, reference: string) => Promise<boolean>;
   submitVerification: (type: 'identity' | 'business' | 'credentials', data: any) => Promise<void>;
@@ -159,6 +160,9 @@ interface AppContextProps {
   setSelectedCategory: (category: string | null) => void;
   filterLocation: string;
   setFilterLocation: (location: string) => void;
+  currentTab: string;
+  setTab: (tab: string) => void;
+  updateWithdrawalStatus: (withdrawalId: string, status: 'pending' | 'processing' | 'completed' | 'failed') => Promise<void>;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -248,7 +252,15 @@ const playSynthSound = (type: 'click' | 'success' | 'notification' | 'cash') => 
   }
 };
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({ 
+  children, 
+  currentTab = 'home', 
+  setTab = () => {} 
+}: { 
+  children: React.ReactNode; 
+  currentTab?: string; 
+  setTab?: (tab: string) => void; 
+}) {
   const { user, isAdmin } = useAuth();
   const { profile, profileLoading } = useAuth(); // Get from AuthContext
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -257,8 +269,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user) {
       const cleanupMockData = async () => {
+        // Cleanup mock doer profile
         try {
-          // Cleanup mock doer profile
           const doerRef = firestore.doc(db, 'doer_profiles', user.uid);
           const snap = await firestore.getDoc(doerRef);
           if (snap.exists()) {
@@ -278,32 +290,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               window.location.reload();
             }
           }
+        } catch (e) {
+          console.warn('Gracefully skipped/failed mock doer profile cleanup', e);
+        }
 
-          // Cleanup mock portfolio project
+        // Cleanup mock portfolio project
+        try {
           const portRef = firestore.doc(db, 'portfolio_projects', `port-${user.uid}-1`);
           const portSnap = await firestore.getDoc(portRef);
           if (portSnap.exists() && portSnap.data()?.title === 'Puma Kidsuper Borussia Dortmund Replica Jersey Showcase') {
             await firestore.deleteDoc(portRef);
             console.log('Cleaned up mock portfolio project from Firestore');
           }
+        } catch (e) {
+          console.warn('Gracefully skipped/failed mock portfolio project cleanup', e);
+        }
 
-          // Cleanup mock service request
+        // Cleanup mock service request
+        try {
           const reqRef = firestore.doc(db, 'service_requests', `req-${user.uid}-1`);
           const reqSnap = await firestore.getDoc(reqRef);
           if (reqSnap.exists() && reqSnap.data()?.title === 'Puma Apparel Customization & Delivery') {
             await firestore.deleteDoc(reqRef);
             console.log('Cleaned up mock service request from Firestore');
           }
+        } catch (e) {
+          console.warn('Gracefully skipped/failed mock service request cleanup', e);
+        }
 
-          // Cleanup mock review
+        // Cleanup mock review
+        try {
           const revRef = firestore.doc(db, 'reviews', `rev-${user.uid}-1`);
           const revSnap = await firestore.getDoc(revRef);
           if (revSnap.exists() && revSnap.data()?.comment === 'Excellent work, fast delivery and authentic item!') {
             await firestore.deleteDoc(revRef);
             console.log('Cleaned up mock review from Firestore');
           }
-        } catch(e) {
-          console.error('Failed to run mock data cleanup', e);
+        } catch (e) {
+          console.warn('Gracefully skipped/failed mock review cleanup', e);
         }
       };
       cleanupMockData();
@@ -758,8 +782,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    const qWithdrawals = isAdmin
+      ? firestore.query(firestore.collection(db, 'withdrawals'))
+      : firestore.query(
+          firestore.collection(db, 'withdrawals'),
+          firestore.where('userId', '==', user.uid)
+        );
+
     const unsubscribeWithdrawals = firestore.onSnapshot(
-      firestore.query(firestore.collection(db, 'withdrawals'), firestore.where('userId', '==', user.uid)),
+      qWithdrawals,
       (snapshot) => {
         const w: any[] = [];
         snapshot.forEach((doc) => {
@@ -1577,11 +1608,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             (r) => r.doerId === currentUser.id && r.status === 'released' && r.isProductOrder
           ).length;
 
-          // Calculate custom average rating
-          const myReviews = reviewsToCheck.filter((rv) => rv.targetId === prof.id);
+          // Calculate custom average rating from real reviews that have a verified completed project
+          const myReviews = reviewsToCheck.filter((rv) => {
+            if (rv.targetId !== prof.id && rv.targetId !== prof.userId) return false;
+            // First check if bookingId is provided
+            if (rv.bookingId) {
+              const b = requestsToCheck.find((req) => req.id === rv.bookingId);
+              if (b && (b.status === 'released' || b.status === 'completed')) {
+                return true;
+              }
+            }
+            // If bookingId is not explicitly set, find any completed booking in requestsToCheck between the reviewer and this doer
+            const reviewerId = rv.authorId || rv.reviewerId;
+            if (reviewerId) {
+              const hasCompletedBooking = requestsToCheck.some(
+                (req) => (req.bookingOwnerId === reviewerId && req.doerId === prof.userId) && 
+                         (req.status === 'released' || req.status === 'completed')
+              );
+              if (hasCompletedBooking) {
+                return true;
+              }
+            }
+            return false;
+          });
           const avgRating = myReviews.length > 0 
             ? parseFloat((myReviews.reduce((sum, r) => sum + r.rating, 0) / myReviews.length).toFixed(1))
-            : (prof.rating || 0.0);
+            : 0.0;
 
           // Calculate completion rate
           const completionRate = totalJobsRequested > 0 
@@ -2529,13 +2581,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- REVIEWS ENGINE ---
-  const addReview = async (targetId: string, rating: number, comment: string, customId?: string) => {
+  const addReview = async (targetId: string, rating: number, comment: string, customId?: string, bookingId?: string) => {
     if (!user) return;
+
+    const computedBookingId = bookingId || (customId && customId.startsWith('rev-') ? customId.replace('rev-', '') : undefined);
+    
+    // Find matching service request/project
+    let matchedBooking = serviceRequests.find(b => b.id === computedBookingId);
+    
+    // If no explicit booking ID, try to find any completed project between the current user and the target provider
+    if (!matchedBooking) {
+      matchedBooking = serviceRequests.find(b => 
+        (b.bookingOwnerId === user.uid && (b.doerId === targetId || b.id === targetId)) && 
+        (b.status === 'released' || b.status === 'completed') &&
+        !reviews.some(r => r.bookingId === b.id || r.id === `rev-${b.id}`)
+      );
+    }
+
+    if (!matchedBooking) {
+      showToast('You must have a completed, unreviewed project with this provider to submit a rating/review.', 'error');
+      return;
+    }
+
+    if (matchedBooking.status !== 'released' && matchedBooking.status !== 'completed') {
+      showToast('Reviews can only be submitted if the project status is verified as completed.', 'error');
+      return;
+    }
+
+    // Double check: restrict to one review per completed project
+    const alreadyReviewed = reviews.some(r => r.bookingId === matchedBooking.id || r.id === `rev-${matchedBooking.id}`);
+    if (alreadyReviewed) {
+      showToast('You have already submitted a review for this completed project.', 'error');
+      return;
+    }
+
     triggerSound('success');
 
-    const reviewId = customId || firestore.doc(firestore.collection(db, 'reviews')).id;
+    const reviewId = customId || `rev-${matchedBooking.id}`;
+    
     const newReview: Review = {
       id: reviewId,
+      bookingId: matchedBooking.id,
       targetId,
       authorId: user.uid,
       authorName: `${currentUser.firstName} ${currentUser.lastName}`.trim() || 'User',
@@ -2552,6 +2638,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       logError(err);
       showToast('Failed to submit review', 'error');
+    }
+  };
+
+  const addReviewReply = async (reviewId: string, replyText: string) => {
+    if (!user || !currentUser) return;
+    triggerSound('success');
+
+    const replyData = {
+      reply: replyText.trim(),
+      replyCreatedAt: new Date().toISOString(),
+      replyAuthorName: `${currentUser.firstName} ${currentUser.lastName}`.trim() || 'DOER'
+    };
+
+    try {
+      await firestore.updateDoc(firestore.doc(db, 'reviews', reviewId), replyData);
+      showToast('Reply submitted successfully! 💬', 'success');
+    } catch (err) {
+      logError('Failed to add review reply:', err);
+      showToast('Failed to submit reply', 'error');
     }
   };
 
@@ -2691,7 +2796,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- WALLET WITHDRAWAL (FINANCIAL SYSTEMS) ---
-  const requestWithdrawal = (amount: number, bankName: string, accountNumber: string): boolean => {
+  const requestWithdrawal = (amount: number, bankName: string, accountNumber: string, accountHolderName: string, branchCode: string): boolean => {
     if (!currentUser.id) return false;
     if (wallet.balance < amount) {
       dispatchNotification('Withdrawal Failed ❌', 'Insufficient funds available in your DOER wallet.', 'alert');
@@ -2713,6 +2818,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       payoutAmount,
       bankName,
       accountNumber,
+      accountHolderName,
+      branchCode,
       status: 'pending',
       createdAt: new Date().toISOString()
     };
@@ -2745,35 +2852,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         dispatchNotification(
           'Withdrawal Requested! 🏦',
-          `Withdrawal of R${amount} submitted. Fee: R${feeAmount.toFixed(2)}, Payout: R${payoutAmount.toFixed(2)}.`,
+          `Withdrawal of R${amount} submitted to admin for bank deposit (${bankName}). Awaiting admin review.`,
           'payment'
         );
-        showToast(`Withdrawal request submitted! 🏦`, 'success');
-
-        // Auto-approve after 5 seconds for simulation delight
-        setTimeout(async () => {
-          try {
-            await firestore.updateDoc(firestore.doc(db, 'withdrawals', withdrawalId), {
-              status: 'completed'
-            });
-            setWithdrawals((prev) =>
-              prev.map((w) => {
-                if (w.id === withdrawalId) {
-                  return { ...w, status: 'completed' };
-                }
-                return w;
-              })
-            );
-            dispatchNotification(
-              'Withdrawal Completed! ✅',
-              `Your withdrawal of R${amount} has cleared successfully.`,
-              'alert'
-            );
-            showToast(`Withdrawal of R${amount} completed! ✅`, 'success');
-          } catch (e) {
-            logError('Error completing withdrawal', e);
-          }
-        }, 6000);
+        showToast(`Withdrawal request submitted to admin! 🏦`, 'success');
       } catch (e) {
         logError('Error requesting withdrawal:', e);
         showToast('Error requesting withdrawal', 'error');
@@ -2781,6 +2863,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
 
     return true;
+  };
+
+  const updateWithdrawalStatus = async (withdrawalId: string, newStatus: 'pending' | 'processing' | 'completed' | 'failed') => {
+    const existing = withdrawals.find(w => w.id === withdrawalId);
+    if (existing && existing.status === 'completed' && newStatus !== 'completed') {
+      showToast('Security Error: Completed withdrawals are securely locked and cannot be modified.', 'error');
+      return;
+    }
+
+    try {
+      await firestore.updateDoc(firestore.doc(db, 'withdrawals', withdrawalId), {
+        status: newStatus,
+        updatedAt: firestore.serverTimestamp()
+      });
+
+      setWithdrawals((prev) =>
+        prev.map((w) => (w.id === withdrawalId ? { ...w, status: newStatus } : w))
+      );
+
+      showToast(`Withdrawal status updated to ${newStatus}!`, 'success');
+      triggerSound('success');
+
+      if (existing) {
+        if (newStatus === 'completed') {
+          await createNotification(
+            existing.userId,
+            'ZAR Withdrawal Completed! ✅',
+            `Your withdrawal of R${existing.amount} to ${existing.bankName} has been deposited and completed by Admin.`,
+            'payment'
+          );
+        } else if (newStatus === 'processing') {
+          await createNotification(
+            existing.userId,
+            'Withdrawal Processing 🔄',
+            `Your withdrawal of R${existing.amount} is currently being processed by admin finance.`,
+            'alert'
+          );
+        } else if (newStatus === 'failed') {
+          await createNotification(
+            existing.userId,
+            'Withdrawal Rejected ❌',
+            `Your withdrawal of R${existing.amount} was rejected or failed verification. Please contact support.`,
+            'alert'
+          );
+        }
+      }
+    } catch (e) {
+      logError('Error updating withdrawal status:', e);
+      showToast('Failed to update withdrawal status', 'error');
+    }
   };
 
   // --- IDENTITY & BUSINESS VERIFICATION ---
@@ -3441,6 +3573,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setTypingStatus,
         markMessagesAsRead,
         addReview,
+        addReviewReply,
         requestWithdrawal,
         topUpWallet,
         transferFunds,
@@ -3480,7 +3613,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         selectedCategory,
         setSelectedCategory,
         filterLocation,
-        setFilterLocation
+        setFilterLocation,
+        currentTab,
+        setTab,
+        updateWithdrawalStatus
       }}
     >
       {children}

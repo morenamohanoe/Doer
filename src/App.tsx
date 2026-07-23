@@ -175,10 +175,11 @@ function AppContent() {
     topUpWallet,
     searchQuery,
     selectedCategory,
-    filterLocation
+    filterLocation,
+    currentTab,
+    setTab
   } = useApp();
   const { user, loading: authLoading } = useAuth();
-  const [currentTab, setTab] = useState('home');
   
   useEffect(() => {
     const handleNavigateTab = (e: any) => {
@@ -188,7 +189,7 @@ function AppContent() {
     };
     window.addEventListener('navigateTab', handleNavigateTab);
     return () => window.removeEventListener('navigateTab', handleNavigateTab);
-  }, []);
+  }, [setTab]);
 
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
@@ -972,13 +973,28 @@ function AppContent() {
                     {selectedSavedDetail.type !== 'doer' && (
                       <button
                         onClick={() => {
+                          const isOwn = selectedSavedDetail.doerId === currentUser?.id || 
+                                        selectedSavedDetail.doerId === currentUser?.uid || 
+                                        selectedSavedDetail.userId === currentUser?.id || 
+                                        selectedSavedDetail.userId === currentUser?.uid;
+                          if (isOwn) {
+                            showToast("You cannot book your own listing!", "error");
+                            return;
+                          }
                           triggerSound('success');
                           createRequest(selectedSavedDetail.id, selectedSavedDetail.type);
                           setTab('conversations');
                           setIsSavedModalOpen(false);
                           setSelectedSavedDetail(null);
                         }}
-                        className="flex-1 bg-brand text-zinc-900 rounded-xl py-2.5 font-black text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        className={`flex-1 rounded-xl py-2.5 font-black text-xs shadow-sm active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          (selectedSavedDetail.doerId === currentUser?.id || 
+                           selectedSavedDetail.doerId === currentUser?.uid || 
+                           selectedSavedDetail.userId === currentUser?.id || 
+                           selectedSavedDetail.userId === currentUser?.uid)
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-brand text-zinc-900 hover:opacity-95'
+                        }`}
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
                         {selectedSavedDetail.type === 'service' ? 'Book Now' : 'Buy Now'}
@@ -1443,8 +1459,9 @@ function AppContent() {
 }
 
 export default function App() {
+  const [currentTab, setTab] = useState('home');
   return (
-    <AppProvider>
+    <AppProvider currentTab={currentTab} setTab={setTab}>
       {/* Fully responsive viewport wrapper */}
       <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-150 flex items-center justify-center font-sans antialiased md:py-4 md:px-4">
         

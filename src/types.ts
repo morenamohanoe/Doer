@@ -415,6 +415,9 @@ export interface Review {
   rating: number;
   comment: string;
   createdAt: string;
+  reply?: string;
+  replyCreatedAt?: string;
+  replyAuthorName?: string;
 }
 
 export interface Wallet {
@@ -434,7 +437,9 @@ export interface Withdrawal {
   payoutAmount: number;
   bankName: string;
   accountNumber: string;
-  status: 'pending' | 'completed' | 'failed';
+  accountHolderName?: string;
+  branchCode?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: string;
 }
 

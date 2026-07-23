@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck,
   Award,
-  RefreshCw,
   MapPin,
   Check,
   ChevronRight,
@@ -101,7 +100,6 @@ export default function ProfileScreen() {
     currentUser,
     roleProfiles,
     activeRole,
-    requestWithdrawal,
     submitVerification,
     verificationRequests,
     roleProgressions,
@@ -116,11 +114,6 @@ export default function ProfileScreen() {
     serviceRequests
   } = useApp();
 
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [bankName, setBankName] = useState('First National Bank (FNB)');
-  const [accountNum, setAccountNum] = useState('');
-  const [withdrawing, setWithdrawing] = useState(false);
-  const [withdrawMessage, setWithdrawMessage] = useState('');
   const [showMyPortfolio, setShowMyPortfolio] = useState(false);
   const [focusedSavedDoerId, setFocusedSavedDoerId] = useState<string | null>(null);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -211,8 +204,29 @@ export default function ProfileScreen() {
   // Find active profile
   const profile = roleProfiles.find((p) => p.role === activeRole && (p.userId === currentUser?.uid || p.userId === currentUser?.id)) || roleProfiles.find((p) => p.userId === currentUser?.uid || p.userId === currentUser?.id) || roleProfiles[0];
 
-  // Fetch reviews for this Doer
-  const doerReviews = reviews.filter((r) => r.targetId === profile?.id || r.targetId === profile?.userId);
+  // Fetch reviews for this Doer that are verified as completed projects
+  const doerReviews = reviews.filter((r) => {
+    if (!profile) return false;
+    if (r.targetId !== profile.id && r.targetId !== profile.userId) return false;
+    // Check if there is a completed project (booking) for this review
+    if (r.bookingId) {
+      const b = serviceRequests.find((req) => req.id === r.bookingId);
+      if (b && (b.status === 'released' || b.status === 'completed')) {
+        return true;
+      }
+    }
+    const reviewerId = r.authorId || r.reviewerId;
+    if (reviewerId) {
+      const hasCompletedBooking = serviceRequests.some(
+        (req) => (req.bookingOwnerId === reviewerId && req.doerId === profile.userId) && 
+                 (req.status === 'released' || req.status === 'completed')
+      );
+      if (hasCompletedBooking) {
+        return true;
+      }
+    }
+    return false;
+  });
   const dynamicReviewCount = doerReviews.length;
   const dynamicAverageRating = dynamicReviewCount > 0 
     ? (doerReviews.reduce((acc, curr) => acc + curr.rating, 0) / dynamicReviewCount).toFixed(1)
@@ -580,31 +594,6 @@ export default function ProfileScreen() {
   const trust = dynamicTrustScore;
 
   const activeProg = roleProgressions.find((p) => p.role === 'doer');
-
-  const handleWithdraw = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0) {
-      setWithdrawMessage('Please enter a valid numeric amount to withdraw.');
-      return;
-    }
-    if (!accountNum.trim()) {
-      setWithdrawMessage('Please provide your South African bank account number.');
-      return;
-    }
-
-    setWithdrawing(true);
-    setTimeout(() => {
-      const success = requestWithdrawal(Number(withdrawAmount), bankName, accountNum);
-      setWithdrawing(false);
-      if (success) {
-        setWithdrawMessage(`Withdrawal of R${withdrawAmount} queued successfully!`);
-        setWithdrawAmount('');
-        setAccountNum('');
-      } else {
-        setWithdrawMessage('Withdrawal failed. Check if you have enough funds.');
-      }
-    }, 1500);
-  };
 
   const isIdentitySubmitted = verificationRequests.some((r) => r.type === 'identity');
   const isIdentityApproved = currentUser.verificationStatus === 'identity_verified' || currentUser.verificationStatus === 'business_verified';
@@ -1684,89 +1673,7 @@ export default function ProfileScreen() {
         </div>
       </motion.div>
 
-      {/* 🏦 FINANCIAL WITHDRAWALS SYSTEM */}
-      {activeRole === 'doer' && (
-        <motion.div
-          className="bg-white p-5 geom-card border border-slate-100 shadow-xs space-y-4 hover:shadow-lg transition-all duration-300"
-          whileHover={{
-            scale: 1.02
-          }}>
-          <div>
-            <h4 className="font-black text-slate-900 text-sm">ZAR Bank Withdrawal</h4>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Transfer funds securely from your DOER wallet to your bank account</p>
-          </div>
 
-          <form onSubmit={handleWithdraw} className="space-y-3">
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                  Amount (ZAR)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">R</span>
-                  <input
-                    type="number"
-                    placeholder="e.g. 500"
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    className="w-full pl-6 pr-2 py-2 bg-slate-50 border border-slate-150 rounded-xl text-xs font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                  Bank Name
-                </label>
-                <select
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  className="w-full px-2 py-2 bg-slate-50 border border-slate-150 rounded-xl text-xs font-bold"
-                >
-                  <option>First National Bank (FNB)</option>
-                  <option>Standard Bank</option>
-                  <option>Capitec Bank</option>
-                  <option>Nedbank</option>
-                  <option>Absa</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                Account Number
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 62123456789"
-                value={accountNum}
-                onChange={(e) => setAccountNum(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-150 rounded-xl text-xs font-semibold"
-              />
-            </div>
-
-            {withdrawMessage && (
-              <p className="text-[11px] font-bold text-brand-dark bg-brand-light p-2 rounded-xl">
-                {withdrawMessage}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={withdrawing}
-              className="w-full py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl font-bold text-xs shadow-md shadow-emerald-50 flex items-center justify-center gap-1 transition-all"
-            >
-              {withdrawing ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Processing transfer...
-                </>
-              ) : (
-                'Request Instant Payout 🚀'
-              )}
-            </button>
-          </form>
-        </motion.div>
-      )}
 
       {/* ❤️ SAVED ITEMS (FAVORITES) SECTION */}
       <motion.div

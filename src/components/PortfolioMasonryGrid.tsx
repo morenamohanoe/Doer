@@ -12,7 +12,7 @@ interface PortfolioMasonryGridProps {
 }
 
 export default function PortfolioMasonryGrid({ projects }: PortfolioMasonryGridProps) {
-  const { portfolioImages, incrementProjectViews, triggerSound, serviceCategories } = useApp();
+  const { portfolioImages, incrementProjectViews, triggerSound, serviceCategories, reviews } = useApp();
   
   // Lightbox & Detail control state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -98,6 +98,13 @@ export default function PortfolioMasonryGrid({ projects }: PortfolioMasonryGridP
           const catObj = serviceCategories.find((c) => c.id === project.category_id);
           const categoryName = catObj ? catObj.name : (project.category_id || 'Services');
           
+          const doerReviews = reviews.filter(
+            (r) => r.targetId === project.userId || r.targetId === (project as any).doerId
+          );
+          const realRatingVal = doerReviews.length > 0
+            ? (doerReviews.reduce((sum, r) => sum + r.rating, 0) / doerReviews.length).toFixed(1)
+            : "0.0";
+
           return (
             <motion.div
               key={project.id}
@@ -157,12 +164,16 @@ export default function PortfolioMasonryGrid({ projects }: PortfolioMasonryGridP
 
                 {/* Bottom interactive footer card details */}
                 <div className="flex items-center justify-between pt-2.5 border-t border-slate-50 text-[9px] text-slate-400 font-bold mt-1">
-                  <span className="text-emerald-600 flex items-center gap-1 font-extrabold bg-emerald-50 px-2 py-0.5 rounded">
-                    ★ {project.rating === 0 ? "0.0" : project.rating || "0.0"} Score
+                  <span className={`flex items-center gap-1 font-extrabold px-2 py-0.5 rounded-full ${
+                    parseFloat(realRatingVal) > 0 
+                      ? 'text-amber-700 bg-amber-50 border border-amber-200/50' 
+                      : 'text-slate-500 bg-slate-100'
+                  }`}>
+                    ★ {realRatingVal === "0.0" ? "0.0 (Unrated)" : `${realRatingVal} (${doerReviews.length} ${doerReviews.length === 1 ? 'review' : 'reviews'})`}
                   </span>
                   {project.clientFeedback && (
                     <span className="text-indigo-600 line-clamp-1 max-w-[100px]" title={project.clientFeedback}>
-                      💬 client feedback
+                      💬 feedback
                     </span>
                   )}
                 </div>

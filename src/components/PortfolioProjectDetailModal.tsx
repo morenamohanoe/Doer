@@ -19,7 +19,7 @@ export default function PortfolioProjectDetailModal({
   images,
   onOpenLightbox
 }: PortfolioProjectDetailModalProps) {
-  const { serviceCategories, triggerSound } = useApp();
+  const { serviceCategories, triggerSound, reviews } = useApp();
   const [activeTab, setActiveTab] = useState<'details' | 'comparison'>('details');
 
   if (!isOpen) return null;
@@ -29,6 +29,13 @@ export default function PortfolioProjectDetailModal({
   const categoryColor = catObj ? catObj.color : 'from-slate-500 to-slate-600';
 
   const isVerified = project.isVerified || (project as any).is_verified;
+
+  const doerReviews = reviews.filter(
+    (r) => r.targetId === project.userId || r.targetId === (project as any).doerId
+  );
+  const realRatingVal = doerReviews.length > 0
+    ? (doerReviews.reduce((sum, r) => sum + r.rating, 0) / doerReviews.length).toFixed(1)
+    : "0.0";
 
   return (
     <AnimatePresence>
@@ -97,8 +104,8 @@ export default function PortfolioProjectDetailModal({
                   <Eye className="w-3 h-3" />
                   {project.views} views
                 </span>
-                <span className="flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">
-                  ★ {project.rating === 0 ? "0.0" : project.rating || "0.0"} Score
+                <span className="flex items-center gap-1 bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                  ★ {realRatingVal === "0.0" ? "0.0 (Unrated)" : `${realRatingVal} (${doerReviews.length} ${doerReviews.length === 1 ? 'review' : 'reviews'})`}
                 </span>
               </div>
             </div>

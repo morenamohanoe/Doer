@@ -55,7 +55,9 @@ export default function AdminCategoryModeration() {
     currentUser,
     verificationRequests,
     approveVerificationRequest,
-    rejectVerificationRequest
+    rejectVerificationRequest,
+    withdrawals,
+    updateWithdrawalStatus
   } = useApp();
   
   // Search and Filter State
@@ -98,7 +100,9 @@ export default function AdminCategoryModeration() {
     onConfirm: () => {},
   });
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'manage' | 'requests' | 'fees' | 'verifications'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'manage' | 'requests' | 'fees' | 'verifications' | 'withdrawals'>('analytics');
+  const [withdrawSearch, setWithdrawSearch] = useState('');
+  const [withdrawStatusFilter, setWithdrawStatusFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
   
   // Manage Category Filtering
   const filteredCategories = serviceCategories.filter(cat => {
@@ -391,6 +395,24 @@ export default function AdminCategoryModeration() {
             )}
             ({verificationRequests.length})
             {activeTab === 'verifications' && (
+              <motion.div layoutId="adminTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full" />
+            )}
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('withdrawals'); triggerSound('click'); }}
+            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'withdrawals' 
+                ? 'text-brand' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Bank Withdrawals
+            {withdrawals.filter(w => w.status === 'pending').length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            )}
+            ({withdrawals.length})
+            {activeTab === 'withdrawals' && (
               <motion.div layoutId="adminTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full" />
             )}
           </button>
@@ -853,6 +875,158 @@ export default function AdminCategoryModeration() {
                   <Shield className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                   <p className="text-xs font-bold text-slate-700">No verification requests found</p>
                   <p className="text-[11px] text-slate-400 mt-1">Users haven't submitted any verification requests matching these filters yet.</p>
+                </div>
+              )}
+            </motion.div>
+          ) : activeTab === 'withdrawals' ? (
+            <motion.div
+              key="withdrawals-tab"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              {/* Filter controls */}
+              <div className="flex flex-col sm:flex-row gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={withdrawSearch}
+                    onChange={(e) => setWithdrawSearch(e.target.value)}
+                    placeholder="Search bank name, account number, or user ID..."
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand focus:border-brand transition-all outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  {(['all', 'pending', 'processing', 'completed', 'failed'] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setWithdrawStatusFilter(status)}
+                      className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                        withdrawStatusFilter === status
+                          ? 'bg-brand border-brand text-white shadow-sm shadow-brand/10'
+                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {withdrawals.filter(w => {
+                const matchesSearch = (w.bankName || '').toLowerCase().includes(withdrawSearch.toLowerCase()) ||
+                                      (w.accountNumber || '').includes(withdrawSearch) ||
+                                      w.userId.toLowerCase().includes(withdrawSearch.toLowerCase());
+                const matchesStatus = withdrawStatusFilter === 'all' ? true : w.status === withdrawStatusFilter;
+                return matchesSearch && matchesStatus;
+              }).length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {withdrawals.filter(w => {
+                    const matchesSearch = (w.bankName || '').toLowerCase().includes(withdrawSearch.toLowerCase()) ||
+                                          (w.accountNumber || '').includes(withdrawSearch) ||
+                                          w.userId.toLowerCase().includes(withdrawSearch.toLowerCase());
+                    const matchesStatus = withdrawStatusFilter === 'all' ? true : w.status === withdrawStatusFilter;
+                    return matchesSearch && matchesStatus;
+                  }).map((w) => {
+                    const isCompleted = w.status === 'completed';
+                    const isProcessing = w.status === 'processing';
+                    const isPending = w.status === 'pending';
+                    return (
+                      <motion.div
+                        key={w.id}
+                        layout
+                        className="bg-white border border-slate-150 rounded-2xl p-5 shadow-sm space-y-4 text-left"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-900 text-sm">ZAR Withdrawal Request</h4>
+                              <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase ${
+                                isCompleted ? 'bg-emerald-100 text-emerald-800' :
+                                isProcessing ? 'bg-blue-100 text-blue-800' :
+                                isPending ? 'bg-amber-100 text-amber-800' :
+                                'bg-rose-100 text-rose-800'
+                              }`}>
+                                {isCompleted ? '✅ Completed & Deposited' :
+                                 isProcessing ? '🔄 Processing' :
+                                 isPending ? '🕒 Pending Review' : '❌ Failed / Rejected'}
+                              </span>
+                              {isCompleted && (
+                                <span className="text-emerald-600 font-extrabold text-[10px]">🔒 Locked (Completed)</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                              Request ID: <span className="font-mono">{w.id}</span> • User ID: <span className="font-mono">{w.userId}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-base font-black text-slate-900 block">R{w.amount}</span>
+                            <span className="text-[10px] font-semibold text-slate-500">
+                              Fee (5%): R{w.feeAmount?.toFixed(2) || (w.amount * 0.05).toFixed(2)} • Payout: R{w.payoutAmount?.toFixed(2) || (w.amount * 0.95).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                          <div>
+                            <span className="text-[10px] font-black text-slate-400 uppercase block mb-0.5">Bank Details</span>
+                            <div className="font-bold text-slate-800">{w.bankName}</div>
+                            <div className="font-mono text-slate-600">Account: {w.accountNumber}</div>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black text-slate-400 uppercase block mb-0.5">Timestamp</span>
+                            <div className="text-slate-700 font-medium">{w.createdAt ? new Date(w.createdAt).toLocaleString() : 'Just now'}</div>
+                          </div>
+                        </div>
+
+                        {/* Admin Action Buttons */}
+                        <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100 justify-end">
+                          {isCompleted ? (
+                            <div className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                              <span>🔒 This withdrawal is successfully completed and permanently locked against modifications.</span>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => updateWithdrawalStatus(w.id, 'processing')}
+                                disabled={isProcessing}
+                                className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-[10px] font-black transition-all cursor-pointer"
+                              >
+                                🔄 Mark Processing
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => updateWithdrawalStatus(w.id, 'failed')}
+                                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-[10px] font-black transition-all cursor-pointer"
+                              >
+                                ❌ Reject / Fail
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => updateWithdrawalStatus(w.id, 'completed')}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black shadow-md transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                ✅ Confirm Deposit & Complete 🚀
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-20 text-center bg-white rounded-3xl border border-slate-150 p-6 shadow-sm">
+                  <Shield className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-xs font-bold text-slate-700">No withdrawal requests found</p>
+                  <p className="text-[11px] text-slate-400 mt-1">No bank withdrawal requests match the selected filters.</p>
                 </div>
               )}
             </motion.div>

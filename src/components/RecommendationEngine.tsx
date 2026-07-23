@@ -53,7 +53,10 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
     triggerSound, 
     showToast,
     searchQuery,
-    currentUser
+    currentUser,
+    reviews,
+    profile,
+    serviceRequests
   } = useApp();
 
   // --- LOCAL PERSISTENCE FOR SEARCH & PREFERENCES ---
@@ -160,7 +163,8 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
       if (!doerId) return;
 
       // Filter out current user's own services
-      if (currentUser && (doerId === currentUser.id || doerId === currentUser.uid)) {
+      const myUserId = currentUser?.id || currentUser?.uid || profile?.userId || profile?.id;
+      if (myUserId && (doerId === myUserId || srv.doerId === myUserId || srv.userId === myUserId)) {
         return;
       }
 
@@ -179,13 +183,18 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
         const occupation = prof?.occupation || prof?.title || prof?.currentJobTitle || 'Local Service Provider';
         const location = prof?.location || (prof?.city ? `${prof.city}${prof.province ? ', ' + prof.province : ''}` : srv.location || '');
 
+        const doerRevs = reviews.filter(r => r.targetId === doerId || (prof?.id && r.targetId === prof.id) || (prof?.userId && r.targetId === prof.userId));
+        const realRating = doerRevs.length > 0
+          ? parseFloat((doerRevs.reduce((a, b) => a + b.rating, 0) / doerRevs.length).toFixed(1))
+          : 0.0;
+
         uniqueDoersMap[doerId] = {
           doerId,
           doerName,
           doerAvatar,
           doerTrustScore: prof?.trustScore?.score || srv.doerTrustScore || 50,
-          rating: prof?.rating || srv.rating || 4.0,
-          reviewCount: prof?.reviewCount || srv.reviewCount || 0,
+          rating: realRating,
+          reviewCount: doerRevs.length,
           categories: [],
           skills: prof?.skills,
           bio: prof?.bio || prof?.shortIntroduction,
@@ -214,10 +223,6 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
           pricingType: srv.pricingType || (srv.priceUnit === 'night' ? 'day' : srv.priceUnit === 'hr' ? 'hour' : srv.priceUnit) || 'fixed'
         });
       }
-
-      // Track highest rating / review count
-      if (srv.rating > d.rating) d.rating = srv.rating;
-      if (srv.reviewCount > d.reviewCount) d.reviewCount = srv.reviewCount;
     });
 
     // 2. Extract and merge doers from roleProfiles
@@ -227,7 +232,8 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
       if (!doerId) return;
 
       // Filter out current user's own profile
-      if (currentUser && (doerId === currentUser.id || doerId === currentUser.uid || prof.userId === currentUser.id || prof.userId === currentUser.uid)) {
+      const myUserId = currentUser?.id || currentUser?.uid || profile?.userId || profile?.id;
+      if (myUserId && (doerId === myUserId || prof.id === myUserId || prof.userId === myUserId)) {
         return;
       }
 
@@ -239,13 +245,18 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
         const occupation = prof.occupation || prof.title || prof.currentJobTitle || 'Local Service Provider';
         const location = prof.location || (prof.city ? `${prof.city}${prof.province ? ', ' + prof.province : ''}` : '');
 
+        const doerRevs = reviews.filter(r => r.targetId === doerId || (prof?.id && r.targetId === prof.id) || (prof?.userId && r.targetId === prof.userId));
+        const realRating = doerRevs.length > 0
+          ? parseFloat((doerRevs.reduce((a, b) => a + b.rating, 0) / doerRevs.length).toFixed(1))
+          : 0.0;
+
         uniqueDoersMap[doerId] = {
           doerId,
           doerName,
           doerAvatar,
           doerTrustScore: prof.trustScore?.score || 50,
-          rating: prof.rating || 4.0,
-          reviewCount: prof.reviewCount || 0,
+          rating: realRating,
+          reviewCount: doerRevs.length,
           categories: [],
           skills: prof.skills,
           bio: prof.bio || prof.shortIntroduction,
@@ -297,18 +308,72 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
 
     // 3. Compute relevance scores
     const doersList = Object.values(uniqueDoersMap);
+    const myUserId = currentUser?.id || currentUser?.uid || profile?.userId || profile?.id;
+    
+    // Extract categories & doers from current user's booking history
+    const boughtCategories = new Set<string>();
+    const boughtDoerIds = new Set<string>();
+    
+    if (myUserId && serviceRequests) {
+      serviceRequests
+        .filter(req => req.bookingOwnerId === myUserId)
+        .forEach(req => {
+          if (req.doerId) boughtDoerIds.add(req.doerId);
+          if (req.serviceId) {
+            const srv = services.find(s => s.id === req.serviceId);
+            if (srv) {
+              const catObj = serviceCategories.find(c => c.id === srv.category || c.name === srv.category || c.id === srv.categoryId);
+              if (catObj) {
+                boughtCategories.add(catObj.name.toLowerCase());
+                boughtCategories.add(catObj.id.toLowerCase());
+              } else if (srv.category) {
+                boughtCategories.add(srv.category.toLowerCase());
+              }
+            }
+          }
+        });
+    }
+
+    const userLocStr = (profile?.location || profile?.city || currentUser?.location || '').toLowerCase().trim();
     
     doersList.forEach(d => {
       let score = 0;
 
-      // Rating bonus: Highly-rated providers are highly preferred! (Max 50 points)
-      score += (d.rating || 4.0) * 10;
+      // Rating bonus: Real ratings boost recommendation score (Max 50 points)
+      score += d.rating * 10;
 
       // Review count bonus: More reviews indicate active & popular service (Max 20 points)
       score += Math.min(d.reviewCount || 0, 20) * 1;
 
       // Trust score bonus: Higher trust means higher security (Max 15 points)
       score += (d.doerTrustScore || 50) * 0.15;
+
+      // 📍 Location match bonus: Higher relevance for closer doers
+      if (userLocStr && d.location) {
+        const doerLocStr = d.location.toLowerCase().trim();
+        if (doerLocStr.includes(userLocStr) || userLocStr.includes(doerLocStr)) {
+          score += 80; // Big bonus for exact/substantial location match
+        } else {
+          const uTokens = userLocStr.split(/[\s,]+/).filter(t => t.length > 2);
+          const dTokens = doerLocStr.split(/[\s,]+/).filter(t => t.length > 2);
+          const hasOverlap = uTokens.some(ut => dTokens.some(dt => dt.includes(ut) || ut.includes(dt)));
+          if (hasOverlap) {
+            score += 50; // Partial match bonus
+          }
+        }
+      }
+
+      // 💼 Booking/Service Purchase History Relevance
+      if (boughtDoerIds.has(d.doerId)) {
+        score += 60; // Doer has worked with user before
+      }
+      
+      const hasBoughtCategoryMatch = d.categories.some(catName => 
+        boughtCategories.has(catName.toLowerCase())
+      );
+      if (hasBoughtCategoryMatch) {
+        score += 50; // High bonus for matching category with user's transaction history
+      }
 
       // Category preference match bonus: +45 points per matching category preference
       if (preferredCategories.length > 0) {
@@ -350,13 +415,18 @@ export default function RecommendationEngine({ onSelectDoer, onSelectService }: 
       d.relevanceScore = Math.round(score);
     });
 
-    // 4. Sort and return only Doers with rating >= 4.0 (Top Rated) or any highly relevant
-    // We sort by relevance score descending.
+    // 4. Sort and return recommended Doers based on relevance and activity
+    const userLoc = (profile?.location || profile?.city || currentUser?.location || '').toLowerCase().trim();
     return doersList
-      .filter(d => d.rating >= 4.0) // Must be Top Rated
+      .filter(d => 
+        d.rating > 0 || 
+        (d.completedJobsCount && d.completedJobsCount > 0) || 
+        d.relevanceScore > 20 ||
+        (userLoc && d.location && (d.location.toLowerCase().includes(userLoc) || userLoc.includes(d.location.toLowerCase())))
+      )
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
       .slice(0, 5); // Recommend top 5
-  }, [services, roleProfiles, serviceCategories, preferredCategories, searchHistory]);
+  }, [services, roleProfiles, serviceCategories, preferredCategories, searchHistory, reviews, currentUser, profile, serviceRequests]);
 
   return (
     <div className="bg-white border border-neutral-100 rounded-3xl p-6 shadow-xs space-y-5 text-left">

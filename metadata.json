@@ -1,6 +1,6 @@
 {
   "name": "DOER",
   "description": "DOER is a South African on-demand services and marketplace platform designed to help people generate income, market skills, sell products, and connect with trusted customers.",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

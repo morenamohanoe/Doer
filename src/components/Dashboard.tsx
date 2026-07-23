@@ -12,7 +12,6 @@ import {
   MessageSquare,
   Sparkles,
   Shield,
-  Briefcase,
   ShoppingBag,
   Star,
   Check,
@@ -75,6 +74,7 @@ export default function Dashboard() {
     addPortfolioProject,
     reviews,
     addReview,
+    addReviewReply,
     services,
     currentUser,
     deleteService,
@@ -100,6 +100,7 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; serviceId: string | null }>({ isOpen: false, serviceId: null });
   const [activeDisputeId, setActiveDisputeId] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [declineConfirmId, setDeclineConfirmId] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<'bookings' | 'jobs' | 'sales'>('bookings');
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<any | null>(null);
@@ -110,6 +111,8 @@ export default function Dashboard() {
   // States for ratings and reviews on completed jobs
   const [requestRatings, setRequestRatings] = useState<Record<string, number>>({});
   const [requestComments, setRequestComments] = useState<Record<string, string>>({});
+  const [replyingToReviewId, setReplyingToReviewId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
 
   // States for Quick Add Portfolio Project upon Job Completion
   const [selectedQuickAddReq, setSelectedQuickAddReq] = useState<any>(null);
@@ -192,13 +195,13 @@ export default function Dashboard() {
   // Custom visual badge helper
   const renderStatusBadge = (status: EscrowStatusType) => {
     const styles: { [key: string]: string } = {
-      requested: 'bg-amber-50 text-amber-700 border-amber-200',
-      accepted: 'bg-brand-light text-brand-dark border-brand/20',
-      deposit_paid: 'bg-blue-50 text-blue-700 border-blue-200',
+      requested: 'bg-blue-50 text-blue-700 border-blue-200',
+      accepted: 'bg-amber-50 text-amber-700 border-amber-200',
+      deposit_paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       in_progress: 'bg-violet-50 text-violet-700 border-violet-200',
       awaiting_approval: 'bg-orange-50 text-orange-700 border-orange-200',
       completed: 'bg-teal-50 text-teal-700 border-teal-200',
-      released: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      released: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       disputed: 'bg-rose-50 text-rose-700 border-rose-200'
     };
 
@@ -616,13 +619,14 @@ export default function Dashboard() {
 
                   {/* Rating & Review Section (Unlocked upon Job Completion / Released Status) */}
                   {req.status === 'released' && (() => {
-                    const existingReview = reviews.find((r) => r.id === `rev-${req.id}`);
+                    const existingReview = reviews.find((r) => r.id === `rev-${req.id}` || r.bookingId === req.id);
                     if (existingReview) {
+                      const isDoerOfRequest = req.doerId === currentUser.id || activeRole === 'doer';
                       return (
-                        <div className="mt-3 p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100/80 space-y-2">
+                        <div className="mt-3 p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100/80 space-y-2.5">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5" /> Your Feedback
+                              <Check className="w-3.5 h-3.5" /> Client Feedback
                             </span>
                             <div className="flex gap-0.5">
                               {[1, 2, 3, 4, 5].map((star) => (
@@ -641,6 +645,70 @@ export default function Dashboard() {
                           <div className="text-[9px] text-slate-400 font-bold">
                             Reviewed on {new Date(existingReview.createdAt).toLocaleDateString()}
                           </div>
+
+                          {/* Render Doer Reply if present */}
+                          {existingReview.reply && (
+                            <div className="mt-2 p-3 rounded-xl bg-white border border-emerald-200/80 space-y-1 text-left">
+                              <div className="flex justify-between items-center text-[10px] font-black text-indigo-900">
+                                <span>💬 DOER Response ({existingReview.replyAuthorName || req.doerName || 'Provider'}):</span>
+                                {existingReview.replyCreatedAt && (
+                                  <span className="text-[8px] text-slate-400">{new Date(existingReview.replyCreatedAt).toLocaleDateString()}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-700 italic">"{existingReview.reply}"</p>
+                            </div>
+                          )}
+
+                          {/* DOER Reply Option */}
+                          {isDoerOfRequest && (
+                            <div className="pt-2 border-t border-emerald-100/80">
+                              {replyingToReviewId === existingReview.id ? (
+                                <div className="space-y-2 mt-1">
+                                  <textarea
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    placeholder="Write your response to this client review..."
+                                    className="w-full p-2 rounded-xl border border-emerald-200 bg-white text-xs focus:outline-none focus:border-indigo-500 font-medium text-slate-800 min-h-[60px]"
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReplyingToReviewId(null);
+                                        setReplyText('');
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 text-[10px] font-black hover:bg-slate-50"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        if (!replyText.trim()) return;
+                                        await addReviewReply(existingReview.id, replyText.trim());
+                                        setReplyingToReviewId(null);
+                                        setReplyText('');
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-black hover:bg-indigo-700"
+                                    >
+                                      Submit Reply
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyingToReviewId(existingReview.id);
+                                    setReplyText(existingReview.reply || '');
+                                  }}
+                                  className="text-[10px] font-black text-indigo-700 hover:text-indigo-900 flex items-center gap-1 transition-colors"
+                                >
+                                  💬 {existingReview.reply ? 'Edit DOER Reply' : 'Reply to Client Feedback'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -916,11 +984,16 @@ export default function Dashboard() {
                 </div>
               ) : filteredDoerRequests.length === 0 ? (
                 <motion.div
-                  className="bg-white p-8 geom-card border border-slate-100 text-center shadow-xs hover:shadow-lg transition-all duration-300"
+                  className="bg-white p-8 geom-card border border-slate-100 text-center shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center"
                   whileHover={{
                     scale: 1.02
                   }}>
-                  <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                  <img
+                    src="/src/assets/images/dashboard_empty_1784804874323.jpg"
+                    alt="No Service Contracts"
+                    referrerPolicy="no-referrer"
+                    className="w-40 h-40 object-contain mb-4 rounded-xl shadow-2xs"
+                  />
                   <h4 className="font-extrabold text-slate-800 text-sm">No Service Contracts</h4>
                   <p className="text-xs text-slate-500 font-medium max-w-xs mx-auto mt-1">
                     Once clients hire you for your published services, active escrow contracts will appear right here.
@@ -974,7 +1047,10 @@ export default function Dashboard() {
                               Accept Offer
                             </button>
                             <button
-                              onClick={() => updateRequestStatus(req.id, 'rejected')}
+                              onClick={() => {
+                                triggerSound('alert');
+                                setDeclineConfirmId(req.id);
+                              }}
                               className="px-4 py-2.5 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl font-bold text-xs cursor-pointer transition-all"
                             >
                               Decline
@@ -989,20 +1065,28 @@ export default function Dashboard() {
                         )}
 
                         {req.status === 'deposit_paid' && (
-                          <button
-                            onClick={() => updateRequestStatus(req.id, 'in_progress')}
-                            className="flex-1 py-2.5 bg-zinc-900 text-white rounded-xl font-bold text-xs cursor-pointer hover:bg-zinc-800 shadow-sm transition-all"
-                          >
-                            Start Job
-                          </button>
+                          <div className="flex gap-2 flex-1">
+                            <button
+                              onClick={() => updateRequestStatus(req.id, 'in_progress')}
+                              className="flex-1 py-2.5 bg-zinc-900 text-white rounded-xl font-bold text-xs cursor-pointer hover:bg-zinc-800 shadow-sm transition-all"
+                            >
+                              Start Job
+                            </button>
+                            <button
+                              onClick={() => updateRequestStatus(req.id, 'awaiting_approval')}
+                              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-sm transition-all"
+                            >
+                              Mark as Completed
+                            </button>
+                          </div>
                         )}
 
                         {req.status === 'in_progress' && (
                           <button
                             onClick={() => updateRequestStatus(req.id, 'awaiting_approval')}
-                            className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs cursor-pointer hover:bg-emerald-700 shadow-sm transition-all"
+                            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-sm transition-all"
                           >
-                            Submit For Approval
+                            Mark as Completed
                           </button>
                         )}
 
@@ -1053,7 +1137,12 @@ export default function Dashboard() {
                         whileHover={{
                           scale: 1.02
                         }}>
-                        <Briefcase className="w-10 h-10 text-slate-300 mx-auto" />
+                        <img
+                          src="/src/assets/images/dashboard_empty_1784804874323.jpg"
+                          alt="No services published"
+                          referrerPolicy="no-referrer"
+                          className="w-40 h-40 object-contain mb-1 rounded-xl shadow-2xs"
+                        />
                         <h4 className="font-extrabold text-slate-800 text-sm">No services published yet</h4>
                         <p className="text-xs text-slate-500 font-medium max-w-xs mx-auto">
                           You haven't published any services yet.
@@ -1395,8 +1484,27 @@ export default function Dashboard() {
               setCancelConfirmId(null);
             }
           }}
-          title="Cancel Job?"
-          message="Are you sure you want to cancel this job? If a deposit was paid, it will be credited back to your account, and a penalty may be applied to the provider."
+          title="Cancel Job Request?"
+          message="Are you sure you want to cancel this job request? If a deposit was paid, it will be credited back to your wallet account. This action cannot be easily undone."
+          confirmText="Yes, Cancel Job"
+          confirmVariant="danger"
+        />
+      )}
+      {declineConfirmId && (
+        <ConfirmationModal
+          isOpen={!!declineConfirmId}
+          onClose={() => setDeclineConfirmId(null)}
+          onConfirm={() => {
+            if (declineConfirmId) {
+              triggerSound('click');
+              updateRequestStatus(declineConfirmId, 'rejected');
+              setDeclineConfirmId(null);
+            }
+          }}
+          title="Decline Job Offer?"
+          message="Are you sure you want to decline this job offer? The client will be notified and no contract will be initiated."
+          confirmText="Yes, Decline"
+          confirmVariant="danger"
         />
       )}
     </div>

@@ -12,7 +12,6 @@ import {
   ArrowLeft,
   ShieldCheck,
   CheckCheck,
-  MessageSquareOff,
   Trash2
 } from 'lucide-react';
 
@@ -143,10 +142,15 @@ export default function ChatScreen() {
             {/* Conversation list */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
               {conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-72 text-center">
-                  <MessageSquareOff className="w-10 h-10 text-slate-300 mb-3" />
-                  <h3 className="text-sm font-extrabold text-slate-700">Inbox is empty</h3>
-                  <p className="text-xs text-slate-400 font-semibold max-w-xs mt-1">
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <img
+                    src="/src/assets/images/conversations_empty_1784804883951.jpg"
+                    alt="Inbox is empty"
+                    referrerPolicy="no-referrer"
+                    className="w-48 h-48 object-contain mb-5 rounded-2xl shadow-sm"
+                  />
+                  <h3 className="text-base font-extrabold text-slate-700">Inbox is empty</h3>
+                  <p className="text-xs text-slate-400 font-semibold max-w-xs mt-2 leading-relaxed">
                     Negotiate prices and confirm job details after hiring a DOER. Book a service to get started.
                   </p>
                 </div>

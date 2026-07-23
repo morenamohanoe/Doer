@@ -8,9 +8,11 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  confirmText?: string;
+  confirmVariant?: 'danger' | 'warning' | 'primary';
 }
 
-export default function ConfirmationModal({ isOpen, onClose, onConfirm, title, message }: ConfirmationModalProps) {
+export default function ConfirmationModal({ isOpen, onClose, onConfirm, title, message, confirmText, confirmVariant }: ConfirmationModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -52,9 +54,15 @@ export default function ConfirmationModal({ isOpen, onClose, onConfirm, title, m
                   onConfirm();
                   onClose();
                 }}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-all"
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  confirmVariant === 'warning'
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : confirmVariant === 'primary'
+                    ? 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                    : 'bg-rose-600 hover:bg-rose-700 text-white'
+                }`}
               >
-                Delete
+                {confirmText || 'Delete'}
               </button>
             </div>
           </motion.div>

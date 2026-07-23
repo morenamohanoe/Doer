@@ -433,7 +433,7 @@
                         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'trustScore', 'verificationStatus', 'verificationLevel', 'averageRating', 'completedJobs', 'walletBalance', 'totalEarnings'])
                       ) || isAdmin();
                       
-        allow delete: if isAdmin();
+        allow delete: if isResourceOwner() || isAdmin();
       }
 
       // Services: Public read, owner modify with schema validation

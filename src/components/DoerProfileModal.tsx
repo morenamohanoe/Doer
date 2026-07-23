@@ -61,7 +61,8 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
     toggleSaveItem,
     deleteService,
     serviceCategories,
-    addReview
+    addReview,
+    addReviewReply
   } = useApp();
 
   // Find the target Doer Profile
@@ -131,25 +132,48 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
   const [newProjDesc, setNewProjDesc] = useState('');
   const [newProjCover, setNewProjCover] = useState('');
 
-  // Review Form state
+  // Review Form & Reply state
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewSortOrder, setReviewSortOrder] = useState<'newest' | 'highest' | 'lowest'>('newest');
+  const [replyingToReviewId, setReplyingToReviewId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
   const [newProjBefore, setNewProjBefore] = useState('');
   const [newProjAfter, setNewProjAfter] = useState('');
   const [newProjExtraImages, setNewProjExtraImages] = useState<{ imageUrl: string; caption: string }[]>([
     { imageUrl: '', caption: '' }
   ]);
 
+  // Compute completed projects and review counts for review eligibility
+  const userCompletedRequestsWithDoer = serviceRequests.filter(
+    (r) => r.bookingOwnerId === currentUser.id && 
+           (r.doerId === profile.id || r.doerId === profile.userId) && 
+           (r.status === 'completed' || r.status === 'released')
+  );
+
+  const existingUserReviewsForDoer = reviews.filter(
+    (r) => r.authorId === currentUser.id && (r.targetId === profile.id || r.targetId === profile.userId)
+  );
+
+  const canUserLeaveReview = userCompletedRequestsWithDoer.length > existingUserReviewsForDoer.length;
+
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewComment.trim()) return;
     
-    addReview(profile.id, reviewRating, reviewComment.trim());
+    const targetBookingId = userCompletedRequestsWithDoer[0]?.id;
+    addReview(profile.id, reviewRating, reviewComment.trim(), undefined, targetBookingId);
     setReviewComment('');
     setReviewRating(5);
     setShowReviewForm(false);
+  };
+
+  const handleSendReply = async (reviewId: string) => {
+    if (!replyText.trim()) return;
+    await addReviewReply(reviewId, replyText.trim());
+    setReplyingToReviewId(null);
+    setReplyText('');
   };
 
   useEffect(() => {
@@ -206,8 +230,28 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
     return matchesSearch && matchesCategory;
   });
 
-  // Fetch reviews for this Doer
-  const doerReviews = reviews.filter((r) => r.targetId === profile.id || r.targetId === profile.userId);
+  // Fetch reviews for this Doer that are verified as completed projects
+  const doerReviews = reviews.filter((r) => {
+    if (r.targetId !== profile.id && r.targetId !== profile.userId) return false;
+    // Check if there is a completed project (booking) for this review
+    if (r.bookingId) {
+      const b = serviceRequests.find((req) => req.id === r.bookingId);
+      if (b && (b.status === 'released' || b.status === 'completed')) {
+        return true;
+      }
+    }
+    const reviewerId = r.authorId || r.reviewerId;
+    if (reviewerId) {
+      const hasCompletedBooking = serviceRequests.some(
+        (req) => (req.bookingOwnerId === reviewerId && req.doerId === profile.userId) && 
+                 (req.status === 'released' || req.status === 'completed')
+      );
+      if (hasCompletedBooking) {
+        return true;
+      }
+    }
+    return false;
+  });
   const dynamicReviewCount = doerReviews.length;
   const dynamicAverageRating = dynamicReviewCount > 0 
     ? (doerReviews.reduce((acc, curr) => acc + curr.rating, 0) / dynamicReviewCount).toFixed(1)
@@ -992,7 +1036,27 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
               {/* Leave Review Action */}
               {!isOwnProfile && (
                 <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-                  {!showReviewForm ? (
+                  {!canUserLeaveReview ? (
+                    <div className="p-4">
+                      {userCompletedRequestsWithDoer.length === 0 ? (
+                        <div className="bg-amber-50/80 border border-amber-200/80 p-3.5 rounded-xl flex items-center gap-3 text-xs text-amber-900 font-bold">
+                          <ShieldCheck className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                          <div>
+                            <span className="block font-black">Verified Customers Only</span>
+                            <span className="text-[10px] text-amber-700 font-medium">You must complete a project with this DOER before leaving a review.</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-emerald-50/80 border border-emerald-200/80 p-3.5 rounded-xl flex items-center gap-3 text-xs text-emerald-900 font-bold">
+                          <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                          <div>
+                            <span className="block font-black">Review Limit Reached</span>
+                            <span className="text-[10px] text-emerald-700 font-medium">You have submitted 1 review for your completed project with this DOER.</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : !showReviewForm ? (
                     <button
                       onClick={() => {
                         triggerSound('click');
@@ -1079,7 +1143,7 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
                   </div>
                 ) : (
                   sortedReviews.map((rev) => (
-                    <div key={rev.id} className="bg-white p-4 rounded-2xl border border-slate-100 space-y-2 text-xs">
+                    <div key={rev.id} className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3 text-xs">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-200">
@@ -1094,9 +1158,74 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
                           <Star className="w-3.5 h-3.5 fill-amber-500" /> {rev.rating}
                         </div>
                       </div>
-                      <p className="text-slate-500 leading-relaxed font-semibold italic">
+
+                      <p className="text-slate-600 leading-relaxed font-semibold italic">
                         "{rev.comment}"
                       </p>
+
+                      {/* Display DOER Reply if exists */}
+                      {rev.reply && (
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1 text-left">
+                          <div className="flex justify-between items-center text-[10px] font-black">
+                            <span className="text-indigo-700 flex items-center gap-1">
+                              💬 Response from DOER ({rev.replyAuthorName || profile.displayName || 'Provider'})
+                            </span>
+                            {rev.replyCreatedAt && (
+                              <span className="text-[9px] text-slate-400 font-semibold">
+                                {new Date(rev.replyCreatedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-700 font-medium italic">"{rev.reply}"</p>
+                        </div>
+                      )}
+
+                      {/* Allow DOER to Reply or Edit Reply if own profile */}
+                      {isOwnProfile && (
+                        <div className="pt-2 border-t border-slate-100">
+                          {replyingToReviewId === rev.id ? (
+                            <div className="space-y-2 mt-2">
+                              <textarea
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                placeholder="Type your official reply to this client review..."
+                                className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-indigo-500 font-medium text-slate-800 min-h-[70px]"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyingToReviewId(null);
+                                    setReplyText('');
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-[10px] font-black hover:bg-slate-50"
+                                >
+                                  CANCEL
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendReply(rev.id)}
+                                  disabled={!replyText.trim()}
+                                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[10px] font-black hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                  SUBMIT REPLY
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyingToReviewId(rev.id);
+                                setReplyText(rev.reply || '');
+                              }}
+                              className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+                            >
+                              💬 {rev.reply ? 'Edit Your Reply' : 'Reply to this Review'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
