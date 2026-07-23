@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { getProperAvatar } from '../utils/avatarUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck,
@@ -25,19 +26,75 @@ import {
   Video,
   ExternalLink,
   Smile,
-  History
+  History,
+  Move
 } from 'lucide-react';
 import DoerProfileModal from './DoerProfileModal';
 import PullToRefresh from './PullToRefresh';
 import PostServiceModal from './PostServiceModal';
 import { signOut } from 'firebase/auth';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, updateDoc, deleteField } from 'firebase/firestore';
+import { auth, db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
+import { doc, updateDoc, setDoc, deleteField } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
 import PortfolioGalleryWithLightbox from './PortfolioGalleryWithLightbox';
 import VerificationDetailsModal from './VerificationDetailsModal';
+import VerificationUploadModal from './VerificationUploadModal';
 import DynamicPricingCalculator from './DynamicPricingCalculator';
 import ProfileQRCodeModal from './ProfileQRCodeModal';
+import ImageCropperModal from './ImageCropperModal';
+import CameraCaptureModal from './CameraCaptureModal';
 import { logError } from '../lib/logger';
+
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 2000): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Storage operation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+};
+
+const compressBase64Image = (dataUrl: string, maxDim = 350, quality = 0.85): Promise<string> => {
+  if (!dataUrl || !dataUrl.startsWith("data:image/")) return Promise.resolve(dataUrl);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+};
 
 export default function ProfileScreen() {
   const {
@@ -68,6 +125,7 @@ export default function ProfileScreen() {
   const [focusedSavedDoerId, setFocusedSavedDoerId] = useState<string | null>(null);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [activeUploadType, setActiveUploadType] = useState<'identity' | 'business' | 'credentials' | null>(null);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [scanHistory, setScanHistory] = useState([]);
 
@@ -273,6 +331,41 @@ export default function ProfileScreen() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const isProcessingMedia = { profile: false, cover: false };
 
+  const [cropperState, setCropperState] = useState<{
+    isOpen: boolean;
+    imageSrc: string;
+    type: 'profile' | 'cover';
+  }>({
+    isOpen: false,
+    imageSrc: '',
+    type: 'profile'
+  });
+
+  const [cameraState, setCameraState] = useState<{
+    isOpen: boolean;
+    type: 'profile' | 'cover';
+  }>({
+    isOpen: false,
+    type: 'profile'
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'cover') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result && typeof event.target.result === 'string') {
+          setCropperState({
+            isOpen: true,
+            imageSrc: event.target.result,
+            type
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Sync edits when context loads
   React.useEffect(() => {
     if (currentUser) {
@@ -326,7 +419,7 @@ export default function ProfileScreen() {
     return url.trim().startsWith('http://') || url.trim().startsWith('https://') || url.trim().startsWith('data:image/');
   };
 
-  const handleSaveProfile = async () => {
+    const handleSaveProfile = async () => {
     if (!editFields.firstName.trim() || !editFields.lastName.trim() || !editFields.phone.trim()) {
       showToast('First Name, Last Name, and Phone are required.', 'error');
       return;
@@ -343,19 +436,73 @@ export default function ProfileScreen() {
 
     setSavingProfile(true);
     try {
-      let avatarUrl = editFields.customProfileUrl.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
-      let coverImageUrl = editUseCustomCoverUrl && isUrlValid(editFields.customCoverUrl) ? editFields.customCoverUrl.trim() : '';
+      let profileImgRaw = editFields.customProfileUrl.trim();
+      let coverImgRaw = editUseCustomCoverUrl && editFields.customCoverUrl.trim() ? editFields.customCoverUrl.trim() : '';
 
-      if (editFields.customProfileUrl.startsWith('data:image/')) {
-        const oldUrl = currentUser.avatarUrl;
-        if (oldUrl && oldUrl.includes('firebasestorage.googleapis.com')) {
+      // Compress base64 data URLs client-side first to ensure fast saving and low payload size
+      if (profileImgRaw.startsWith('data:image/')) {
+        profileImgRaw = await compressBase64Image(profileImgRaw, 350, 0.85);
+      }
+      if (coverImgRaw.startsWith('data:image/')) {
+        coverImgRaw = await compressBase64Image(coverImgRaw, 800, 0.80);
+      }
+
+      let avatarUrl = getProperAvatar(profileImgRaw, `${editFields.firstName} ${editFields.lastName}`.trim(), currentUser?.id, editFields.gender);
+      let coverImageUrl = isUrlValid(coverImgRaw) ? coverImgRaw : '';
+
+      const deleteOldStorageFile = async (urlToClean: string | null | undefined) => {
+        if (!urlToClean || !urlToClean.includes('firebasestorage.googleapis.com')) return;
+        try {
+          const cleanRef = ref(storage, urlToClean);
+          await withTimeout(deleteObject(cleanRef), 1000);
+          console.log('Successfully deleted old storage image:', urlToClean);
+        } catch (delErr) {
+          console.warn('Silent clean failed for old image ref:', urlToClean, delErr);
+        }
+      };
+
+      // Upload profile photo directly if it is base64 data-url with a strict 2s timeout
+      if (profileImgRaw.startsWith('data:image/')) {
+        try {
+          const profileRef = ref(storage, `users/${currentUser.uid}/profile_${Date.now()}.jpg`);
+          await withTimeout(uploadString(profileRef, profileImgRaw, 'data_url'), 2000);
+          const cloudUrl = await withTimeout(getDownloadURL(profileRef), 2000);
+          if (cloudUrl) {
+            avatarUrl = cloudUrl;
+            const oldAvatarUrl = currentUser?.avatarUrl;
+            if (oldAvatarUrl && oldAvatarUrl !== avatarUrl) {
+              await deleteOldStorageFile(oldAvatarUrl);
+            }
+          }
+        } catch (storageErr) {
+          console.warn('Firebase Storage failed or timed out for profile photo, falling back to direct compressed image:', storageErr);
+          avatarUrl = profileImgRaw;
         }
       }
 
-      if (editUseCustomCoverUrl && editFields.customCoverUrl.startsWith('data:image/')) {
-        const oldUrl = profile?.coverImageUrl;
-        if (oldUrl && oldUrl.includes('firebasestorage.googleapis.com')) {
+      // Upload cover photo directly if it is base64 data-url with a strict 2s timeout
+      if (editUseCustomCoverUrl && coverImgRaw.startsWith('data:image/')) {
+        try {
+          const coverRef = ref(storage, `users/${currentUser.uid}/cover_${Date.now()}.jpg`);
+          await withTimeout(uploadString(coverRef, coverImgRaw, 'data_url'), 2000);
+          const cloudCoverUrl = await withTimeout(getDownloadURL(coverRef), 2000);
+          if (cloudCoverUrl) {
+            coverImageUrl = cloudCoverUrl;
+            const oldCoverUrl = profile?.coverImageUrl;
+            if (oldCoverUrl && oldCoverUrl !== coverImageUrl) {
+              await deleteOldStorageFile(oldCoverUrl);
+            }
+          }
+        } catch (storageErr) {
+          console.warn('Firebase Storage failed or timed out for cover banner, falling back to direct compressed image:', storageErr);
+          coverImageUrl = coverImgRaw;
         }
+      } else if (!editUseCustomCoverUrl) {
+        const oldCoverUrl = profile?.coverImageUrl;
+        if (oldCoverUrl) {
+          await deleteOldStorageFile(oldCoverUrl);
+        }
+        coverImageUrl = '';
       }
 
       const userRef = doc(db, 'users', currentUser.uid);
@@ -372,10 +519,10 @@ export default function ProfileScreen() {
         verificationStatus: editFields.verificationStatus,
         updatedAt: new Date().toISOString()
       };
-      await updateDoc(userRef, cleanedUserFields);
+      await setDoc(userRef, cleanedUserFields, { merge: true });
 
       // If activeRole is doer, update the doer profile too
-      if (activeRole === 'doer') {
+      if (activeRole === "doer") {
         const doerRef = doc(db, 'doer_profiles', currentUser.uid);
         const cleanedDoerFields: Record<string, any> = {
           displayName: `${editFields.firstName.trim()} ${editFields.lastName.trim()}`,
@@ -417,7 +564,7 @@ export default function ProfileScreen() {
           cleanedDoerFields.coverImageUrl = deleteField();
         }
 
-        await updateDoc(doerRef, cleanedDoerFields);
+        await setDoc(doerRef, cleanedDoerFields, { merge: true });
       }
 
       showToast('Profile and professional details updated successfully!', 'success');
@@ -699,7 +846,7 @@ export default function ProfileScreen() {
  
                    <div className="absolute bottom-1.5 left-3 w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md bg-white z-20">
                      <img
-                       src={editFields.customProfileUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80'}
+                       src={getProperAvatar(editFields.customProfileUrl, `${editFields.firstName} ${editFields.lastName}`.trim(), currentUser?.id, editFields.gender)}
                        alt="Profile Preview"
                        className="w-full h-full object-cover"
                      />
@@ -711,49 +858,142 @@ export default function ProfileScreen() {
                    </div>
                  </div>
 
-                {/* Media URL Inputs */}
-                <div className="space-y-3 pt-2">
-                  <div className="space-y-1.5">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Profile Image URL
-                    </span>
-                    <input
-                      type="text"
-                      name="customProfileUrl"
-                      placeholder="https://images.unsplash.com/... profile link"
-                      value={editFields.customProfileUrl}
-                      onChange={handleEditChange}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Cover Image URL
-                    </span>
-                    <div className="flex items-center gap-1.5 mb-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editUseCustomCoverUrl}
-                        onChange={(e) => setEditUseCustomCoverUrl(e.target.checked)}
-                        className="w-3.5 h-3.5 text-brand rounded border-slate-300 focus:ring-brand"
-                      />
-                      <span className="text-[10px] font-bold text-slate-700">Enable Custom Cover</span>
-                    </div>
-                    {editUseCustomCoverUrl && (
-                      <input
-                        type="text"
-                        name="customCoverUrl"
-                        placeholder="https://images.unsplash.com/... cover link"
-                        value={editFields.customCoverUrl}
-                        onChange={handleEditChange}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none"
-                      />
-                    )}
-                  </div>
-                </div>
+                {/* Media Upload Controls */}
+                 <div className="space-y-4 pt-2">
+                   {/* Profile Photo Block */}
+                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                     <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
+                         Profile Photo
+                       </span>
+                       {editFields.customProfileUrl && (
+                         <button
+                           type="button"
+                           onClick={() => setCropperState({ isOpen: true, imageSrc: editFields.customProfileUrl, type: 'profile' })}
+                           className="text-[9px] font-black uppercase text-brand hover:underline flex items-center gap-1"
+                         >
+                           <Move className="w-3 h-3" /> Crop & Position
+                         </button>
+                       )}
+                     </div>
+                     <div className="flex items-center gap-3">
+                       <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-white shrink-0 relative">
+                         <img
+                           src={getProperAvatar(editFields.customProfileUrl, `${editFields.firstName} ${editFields.lastName}`.trim(), currentUser?.id, editFields.gender)}
+                           alt="Profile"
+                           className="w-full h-full object-cover"
+                         />
+                         {editFields.customProfileUrl?.startsWith('data:image/') && (
+                           <div className="absolute inset-0 bg-brand/10 border-2 border-brand rounded-full pointer-events-none" />
+                         )}
+                       </div>
+                       <div className="flex-1 space-y-1.5">
+                         <div className="flex items-center gap-2">
+                           <label className="inline-flex items-center justify-center px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-all shadow-sm">
+                             <span>Choose Image File</span>
+                             <input
+                               type="file"
+                               accept="image/*"
+                               onChange={(e) => handleFileChange(e, 'profile')}
+                               className="hidden"
+                             />
+                           </label>
+                         
+                           <button
+                             type="button"
+                             onClick={() => setCameraState({ isOpen: true, type: 'profile' })}
+                             className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-sm"
+                           >
+                             <Camera className="w-3.5 h-3.5 text-brand" />
+                             <span>Take Photo</span>
+                           </button>
+                         </div>
+                         
+                         {editFields.customProfileUrl?.startsWith('data:image/') && (
+                           <div className="flex">
+                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand/10 text-brand rounded text-[9px] font-black uppercase tracking-wider animate-pulse">
+                               ✨ Unsaved Crop Preview
+                             </span>
+                           </div>
+                         )}
+                         <p className="text-[9px] text-slate-400 font-medium">Supports PNG, JPG, GIF. Max 5MB.</p>
+                       </div>
+                     </div>
+                   </div>
+                   {/* Cover Banner Block */}
+                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                     <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-1.5 cursor-pointer">
+                         <input
+                           type="checkbox"
+                           id="enable-custom-cover"
+                           checked={editUseCustomCoverUrl}
+                           onChange={(e) => setEditUseCustomCoverUrl(e.target.checked)}
+                           className="w-3.5 h-3.5 text-brand rounded border-slate-300 focus:ring-brand"
+                         />
+                         <label htmlFor="enable-custom-cover" className="text-[10px] font-black text-slate-700 uppercase tracking-wider cursor-pointer">
+                           Enable Custom Cover Banner
+                         </label>
+                       </div>
+                       {editUseCustomCoverUrl && editFields.customCoverUrl && (
+                         <button
+                           type="button"
+                           onClick={() => setCropperState({ isOpen: true, imageSrc: editFields.customCoverUrl, type: 'cover' })}
+                           className="text-[9px] font-black uppercase text-brand hover:underline flex items-center gap-1"
+                         >
+                           <Move className="w-3 h-3" /> Crop & Position
+                         </button>
+                       )}
+                     </div>
 
-                {/* Account details edits */}
+                     {editUseCustomCoverUrl && (
+                        <div className="space-y-2 pt-1">
+                          <div className="w-full h-16 bg-slate-200 rounded-lg overflow-hidden border border-slate-200 relative">
+                            {editFields.customCoverUrl ? (
+                              <img src={editFields.customCoverUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-slate-300 flex items-center justify-center text-slate-500 text-[8px] uppercase tracking-wider font-bold">
+                                No Cover image uploaded
+                              </div>
+                            )}
+                            {editFields.customCoverUrl?.startsWith('data:image/') && (
+                              <div className="absolute inset-0 bg-brand/10 border-2 border-brand rounded-lg pointer-events-none" />
+                            )}
+                            {editFields.customCoverUrl?.startsWith('data:image/') && (
+                              <div className="absolute top-1.5 right-1.5 px-2 py-0.5 bg-brand text-white rounded text-[8px] font-black uppercase tracking-wider animate-pulse shadow-sm">
+                                ✨ Unsaved Crop Preview
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <label className="inline-flex items-center justify-center px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-all shadow-sm">
+                                <span>Choose Image File</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleFileChange(e, 'cover')}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                onClick={() => setCameraState({ isOpen: true, type: 'cover' })}
+                                className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-sm"
+                              >
+                                <Camera className="w-3.5 h-3.5 text-brand" />
+                                <span>Take Photo</span>
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-medium">Wide aspect ratio (e.g. 1200x300) recommended.</p>
+                          </div>
+                        </div>
+                      )}
+                   </div>
+                 </div>
+
+                 {/* Account details edits */}
                 {/* Account details edits */}
                 <div className="space-y-3 pt-3 border-t border-slate-100">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -1118,7 +1358,7 @@ export default function ProfileScreen() {
 
       {/* 🎨 PORTFOLIO WORK GALLERY WITH EXPANDABLE LIGHTBOX */}
       {activeRole === 'doer' && (
-        <PortfolioGalleryWithLightbox userId={profile?.id || 'my-doer-profile'} />
+        <PortfolioGalleryWithLightbox userId={profile?.id || currentUser.id || ''} />
       )}
 
       {/* 📜 RECENT SCANS / HISTORY */}
@@ -1273,8 +1513,8 @@ export default function ProfileScreen() {
               </span>
             ) : (
               <button
-                onClick={() => submitVerification('identity')}
-                className="px-4 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-[10px] font-black shadow-sm"
+                onClick={() => setActiveUploadType('identity')}
+                className="px-4 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-[10px] font-black shadow-sm cursor-pointer"
               >
                 Verify
               </button>
@@ -1303,8 +1543,8 @@ export default function ProfileScreen() {
               </span>
             ) : (
               <button
-                onClick={() => submitVerification('business')}
-                className="px-4 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-[10px] font-black shadow-sm"
+                onClick={() => setActiveUploadType('business')}
+                className="px-4 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-[10px] font-black shadow-sm cursor-pointer"
               >
                 Verify
               </button>
@@ -1348,13 +1588,10 @@ export default function ProfileScreen() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    triggerSound('click');
-                    setShowCredForm(!showCredForm);
-                  }}
+                  onClick={() => setActiveUploadType('credentials')}
                   className="px-4 py-2 bg-zinc-900 hover:bg-black text-white rounded-xl text-[10px] font-black shadow-sm cursor-pointer"
                 >
-                  {showCredForm ? 'Close' : 'Verify'}
+                  Verify
                 </button>
               )}
             </motion.div>
@@ -1611,10 +1848,13 @@ export default function ProfileScreen() {
 
             {/* Filter and display doers */}
             {savedItems.filter(item => item.itemType === 'doer').map(item => {
-              const dr = roleProfiles.find(r => r.id === item.itemId);
+              const dr = roleProfiles.find(r => r.id === item.itemId || r.userId === item.itemId);
               if (!dr) return null;
-              const avatar = dr.avatarUrl || dr.profileImageUrl || (dr.id === 'doer-1' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&fit=crop&q=80' : dr.id === 'doer-2' ? 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&fit=crop&q=80' : dr.id === 'doer-4' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80' : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&fit=crop&q=80');
-              const name = dr.id === 'doer-1' ? 'Sipho Ngwenya' : dr.id === 'doer-2' ? 'Anika van der Merwe' : dr.id === 'doer-3' ? 'David Nkosi' : dr.id === 'doer-4' ? 'Naledi Khumalo' : (dr.displayName || 'Freelancer');
+              const name = dr.displayName || (dr.id === 'doer-1' ? 'Sipho Ngwenya' : dr.id === 'doer-2' ? 'Anika van der Merwe' : dr.id === 'doer-3' ? 'David Nkosi' : dr.id === 'doer-4' ? 'Naledi Khumalo' : 'Service Doer');
+              const avatar = getProperAvatar(dr.profileImageUrl || dr.avatarUrl, name, dr.id || dr.userId, dr.gender);
+              const occupation = dr.occupation || dr.title || dr.currentJobTitle || 'Local Service Provider';
+              const location = dr.location || (dr.city ? `${dr.city}${dr.province ? ', ' + dr.province : ''}` : 'South Africa');
+
               return (
                 <div key={item.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-3 justify-between">
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -1622,7 +1862,8 @@ export default function ProfileScreen() {
                     <div className="min-w-0">
                       <span className="text-[8px] font-black text-indigo-600 uppercase tracking-wider block">Verified Doer</span>
                       <h5 className="text-xs font-black text-slate-800 truncate">{name}</h5>
-                      <span className="text-[10px] font-semibold text-slate-500 block">{dr.title}</span>
+                      <span className="text-[10px] font-extrabold text-indigo-950 block truncate">{occupation}</span>
+                      <span className="text-[9px] font-semibold text-slate-500 block truncate">📍 {location}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -1673,7 +1914,7 @@ export default function ProfileScreen() {
         </div>
       </PullToRefresh>
       {showMyPortfolio && (
-        <DoerProfileModal doerId="my-doer-profile" onClose={() => setShowMyPortfolio(false)} />
+        <DoerProfileModal doerId={currentUser.id} onClose={() => setShowMyPortfolio(false)} />
       )}
       {focusedSavedDoerId && (
         <DoerProfileModal doerId={focusedSavedDoerId} onClose={() => setFocusedSavedDoerId(null)} />
@@ -1699,11 +1940,54 @@ export default function ProfileScreen() {
           isBusinessSubmitted={isBusinessSubmitted}
           isBusinessApproved={isBusinessApproved}
           onSubmitVerification={(type) => {
-            submitVerification(type);
-            showToast(`${type === 'identity' ? 'ID Card' : 'CIPC Certificate'} verification request submitted!`, 'success');
+            setIsVerificationModalOpen(false);
+            setActiveUploadType(type);
           }}
         />
       )}
+
+      {activeUploadType && (
+        <VerificationUploadModal
+          isOpen={!!activeUploadType}
+          onClose={() => setActiveUploadType(null)}
+          type={activeUploadType}
+          onSubmit={async (data) => {
+            await submitVerification(activeUploadType, data);
+            setActiveUploadType(null);
+          }}
+        />
+      )}
+
+      {cropperState.isOpen && (
+        <ImageCropperModal
+          isOpen={cropperState.isOpen}
+          onClose={() => setCropperState(prev => ({ ...prev, isOpen: false }))}
+          imageSrc={cropperState.imageSrc}
+          type={cropperState.type}
+          onCropComplete={(croppedBase64) => {
+            setEditFields(prev => ({
+              ...prev,
+              [cropperState.type === 'profile' ? 'customProfileUrl' : 'customCoverUrl']: croppedBase64
+            }));
+          }}
+        />
+      )}
+
+      {cameraState.isOpen && (
+        <CameraCaptureModal
+          isOpen={cameraState.isOpen}
+          onClose={() => setCameraState(prev => ({ ...prev, isOpen: false }))}
+          onCapture={(capturedBase64) => {
+            setCameraState(prev => ({ ...prev, isOpen: false }));
+            setCropperState({
+              isOpen: true,
+              imageSrc: capturedBase64,
+              type: cameraState.type
+            });
+          }}
+        />
+      )}
+
       {/* Modals */}
       <AnimatePresence>
         {viewingImage && (

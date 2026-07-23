@@ -5,8 +5,7 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, ShieldCheck, CheckCircle2, Shield, Briefcase, Star } from 'lucide-react';
 import { logError } from '../lib/logger';
-
-const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
+import { getProperAvatar } from '../utils/avatarUtils';
 
 export default function Onboarding() {
   const { user, profile } = useAuth();
@@ -73,7 +72,7 @@ export default function Onboarding() {
   };
 
   const getActiveProfilePreview = () => {
-    return profile?.avatarUrl || DEFAULT_AVATAR_URL;
+    return getProperAvatar(profile?.avatarUrl, `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim(), user?.uid, profile?.gender);
   };
 
   const validateStep1 = () => {
@@ -155,7 +154,7 @@ export default function Onboarding() {
         isActive: true,
         updatedAt: new Date().toISOString(),
         
-        avatarUrl: profile?.avatarUrl || DEFAULT_AVATAR_URL,
+        avatarUrl: getProperAvatar(profile?.avatarUrl, `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim(), user.uid, profile?.gender),
         coverImageUrl: fields.coverImageUrl.trim(),
         portfolioImages: portfolioImagesArray,
         portfolioVideos: portfolioVideosArray,
@@ -165,7 +164,7 @@ export default function Onboarding() {
       const rawUserPayload = {
         profileCompleted: true,
         onboardingCompleted: true,
-        avatarUrl: profile?.avatarUrl || DEFAULT_AVATAR_URL,
+        avatarUrl: getProperAvatar(profile?.avatarUrl, `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim(), user.uid, profile?.gender),
         updatedAt: new Date().toISOString()
       };
 
@@ -199,7 +198,7 @@ export default function Onboarding() {
       const rawUserPayload = {
         profileCompleted: true,
         onboardingCompleted: true,
-        avatarUrl: profile?.avatarUrl || DEFAULT_AVATAR_URL,
+        avatarUrl: getProperAvatar(profile?.avatarUrl, `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim(), user.uid, profile?.gender),
         updatedAt: new Date().toISOString()
       };
 
@@ -216,7 +215,7 @@ export default function Onboarding() {
         hourlyRate: 150,
         isActive: true,
         updatedAt: new Date().toISOString(),
-        avatarUrl: profile?.avatarUrl || DEFAULT_AVATAR_URL,
+        avatarUrl: getProperAvatar(profile?.avatarUrl, `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim(), user.uid, profile?.gender),
         coverImageUrl: '',
         portfolioImages: [],
         portfolioVideos: [],

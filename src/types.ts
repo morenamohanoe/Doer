@@ -97,6 +97,8 @@ export interface DoerProfile {
   completedJobsCount?: number;
   salesCount?: number;
   location?: string;
+  city?: string;
+  province?: string;
   skills?: string[];
   languages?: string[];
   bannerColor?: string;
@@ -323,15 +325,15 @@ export interface ServiceRequest {
   serviceId?: string | null; // Optional if direct request
   productId?: string | null; // Optional if purchasing a physical product
   title: string;
-  description: string;
+  description?: string;
   price: number;
   depositAmount: number; // 50%
   bookingOwnerName: string;
-  bookingOwnerAvatar: string;
+  bookingOwnerAvatar?: string;
   bookingOwnerId: string;
   doerId: string;
   doerName: string;
-  location: string;
+  location?: string;
   status: EscrowStatusType;
   createdAt: string;
   updatedAt: string;
@@ -409,7 +411,7 @@ export interface Review {
   authorId?: string;
   targetId: string; // Doer or Service ID
   authorName: string;
-  authorAvatar: string;
+  authorAvatar?: string;
   rating: number;
   comment: string;
   createdAt: string;
@@ -452,10 +454,21 @@ export interface VerificationRequest {
   userId: string;
   userName: string;
   role: UserRoleType;
-  type: 'identity' | 'business';
+  type: 'identity' | 'business' | 'credentials';
   status: 'pending' | 'approved' | 'rejected';
   documentUrl?: string;
   createdAt: string;
+  frontUrl?: string;
+  backUrl?: string;
+  selfieUrl?: string;
+  cipcUrl?: string;
+  idNumber?: string;
+  bizRegNumber?: string;
+  credName?: string;
+  credIssuer?: string;
+  credNumber?: string;
+  credFileUrl?: string;
+  credFileName?: string;
 }
 
 export interface Report {
@@ -479,17 +492,21 @@ export interface PortfolioProject {
   userId: string; // The Doer profile ID
   title: string;
   description: string;
-  category_id: string; // e.g. plumbing, gardening
-  cover_image: string;
+  category?: string;
+  category_id?: string; // e.g. plumbing, gardening
+  cover_image?: string;
+  imageUrl?: string;
+  images?: any[];
   isVerified: boolean; // Verified by DOER badge
-  completedThroughDoer: boolean;
-  views: number;
-  rating: number;
+  completedThroughDoer?: boolean;
+  views?: number;
+  rating?: number;
   avgRating?: number; // for listing stats
   clientFeedback?: string; // from booking owner on complete
   beforeImage?: string; // before photo for before/after comparison
   afterImage?: string; // after photo for before/after comparison
-  createdAt: string;
+  createdAt?: string;
+  verifiedAt?: string;
 }
 
 export interface PortfolioImage {

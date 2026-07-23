@@ -47,11 +47,27 @@ const PRESET_GRADIENTS = [
 ];
 
 export default function AdminCategoryModeration() {
-  const { serviceCategories, categoryRequests, triggerSound, showToast, currentUser } = useApp();
+  const { 
+    serviceCategories, 
+    categoryRequests, 
+    triggerSound, 
+    showToast, 
+    currentUser,
+    verificationRequests,
+    approveVerificationRequest,
+    rejectVerificationRequest
+  } = useApp();
   
   // Search and Filter State
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'pending' | 'archived'>('all');
+  
+  // Verification Filter State
+  const [verStatusFilter, setVerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [verSearch, setVerSearch] = useState('');
+  const [viewingDocUrl, setViewingDocUrl] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectingReqId, setRejectingReqId] = useState<string | null>(null);
   
   // Category Form Modal State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -82,7 +98,7 @@ export default function AdminCategoryModeration() {
     onConfirm: () => {},
   });
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'manage' | 'requests' | 'fees'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'manage' | 'requests' | 'fees' | 'verifications'>('analytics');
   
   // Manage Category Filtering
   const filteredCategories = serviceCategories.filter(cat => {
@@ -98,6 +114,14 @@ export default function AdminCategoryModeration() {
     const matchesSearch = req.name.toLowerCase().includes(search.toLowerCase()) || 
                           (req.requestedByEmail || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = requestFilter === 'all' ? true : req.status === requestFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Verification Request Filtering
+  const filteredVerifications = (verificationRequests || []).filter(req => {
+    const matchesSearch = (req.userName || '').toLowerCase().includes(verSearch.toLowerCase()) ||
+                          (req.userId || '').toLowerCase().includes(verSearch.toLowerCase());
+    const matchesStatus = verStatusFilter === 'all' ? true : req.status === verStatusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -352,6 +376,24 @@ export default function AdminCategoryModeration() {
               <motion.div layoutId="adminTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full" />
             )}
           </button>
+
+          <button
+            onClick={() => { setActiveTab('verifications'); triggerSound('click'); }}
+            className={`pb-3 text-xs font-extrabold tracking-wide uppercase transition-all relative flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'verifications' 
+                ? 'text-brand' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Verifications
+            {verificationRequests.filter(r => r.status === 'pending').length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            )}
+            ({verificationRequests.length})
+            {activeTab === 'verifications' && (
+              <motion.div layoutId="adminTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full" />
+            )}
+          </button>
         </div>
 
         {/* Global Search & Filters bar */}
@@ -582,6 +624,235 @@ export default function AdminCategoryModeration() {
                   <Inbox className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                   <p className="text-xs font-bold text-slate-700">No category requests found</p>
                   <p className="text-[11px] text-slate-400 mt-1">Users haven't requested any custom categories matching these filters yet.</p>
+                </div>
+              )}
+            </motion.div>
+          ) : activeTab === 'verifications' ? (
+            <motion.div
+              key="verifications-tab"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              {/* Filter controls */}
+              <div className="flex flex-col sm:flex-row gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={verSearch}
+                    onChange={(e) => setVerSearch(e.target.value)}
+                    placeholder="Search user verifications..."
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand focus:border-brand transition-all outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setVerStatusFilter(status)}
+                      className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                        verStatusFilter === status
+                          ? 'bg-brand border-brand text-white shadow-sm shadow-brand/10'
+                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {filteredVerifications.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {filteredVerifications.map((req) => (
+                    <motion.div
+                      key={req.id}
+                      layout
+                      className="bg-white border border-slate-150 rounded-2xl p-5 shadow-sm space-y-4"
+                    >
+                      {/* Request Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-extrabold text-sm">
+                            {req.userName?.charAt(0) || 'U'}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm">{req.userName}</h4>
+                            <p className="text-[10px] text-slate-400 font-semibold">
+                              User ID: <span className="font-mono">{req.userId}</span> • Role: <span className="uppercase text-brand font-black">{req.role}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border ${
+                            req.type === 'identity'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              : req.type === 'business'
+                              ? 'bg-blue-50 text-blue-700 border-blue-100'
+                              : 'bg-purple-50 text-purple-700 border-purple-100'
+                          }`}>
+                            {req.type === 'identity' ? 'Smart ID / Passport' : req.type === 'business' ? 'CIPC Company Registration' : 'Trade Credentials'}
+                          </span>
+
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border ${
+                            req.status === 'pending'
+                              ? 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
+                              : req.status === 'approved'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              : 'bg-rose-50 text-rose-700 border-rose-100'
+                          }`}>
+                            {req.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Request Body & Uploaded Documents */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Submission Details</h5>
+                          
+                          {req.type === 'identity' && (
+                            <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <div><span className="font-bold text-slate-500">ID / Passport Number:</span> <span className="font-mono text-slate-900 font-extrabold">{req.idNumber || 'Not provided'}</span></div>
+                              <div><span className="font-bold text-slate-500">Submitted At:</span> <span className="text-slate-900">{req.createdAt ? new Date(req.createdAt).toLocaleString() : 'N/A'}</span></div>
+                            </div>
+                          )}
+
+                          {req.type === 'business' && (
+                            <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <div><span className="font-bold text-slate-500">CIPC Registration Number:</span> <span className="font-mono text-slate-900 font-extrabold">{req.bizRegNumber || 'Not provided'}</span></div>
+                              <div><span className="font-bold text-slate-500">Submitted At:</span> <span className="text-slate-900">{req.createdAt ? new Date(req.createdAt).toLocaleString() : 'N/A'}</span></div>
+                            </div>
+                          )}
+
+                          {req.type === 'credentials' && (
+                            <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <div><span className="font-bold text-slate-500">Credential Name:</span> <span className="text-slate-900 font-extrabold">{req.credName || 'Not provided'}</span></div>
+                              <div><span className="font-bold text-slate-500">Issuing Body:</span> <span className="text-slate-900">{req.credIssuer || 'Not provided'}</span></div>
+                              <div><span className="font-bold text-slate-500">Certificate / License Number:</span> <span className="font-mono text-slate-900 font-extrabold">{req.credNumber || 'Not provided'}</span></div>
+                              <div><span className="font-bold text-slate-500">Submitted At:</span> <span className="text-slate-900">{req.createdAt ? new Date(req.createdAt).toLocaleString() : 'N/A'}</span></div>
+                            </div>
+                          )}
+
+                          {req.rejectionReason && (
+                            <div className="bg-rose-50 border border-rose-100 text-rose-800 p-3 rounded-xl text-xs">
+                              <span className="font-black block text-[10px] uppercase tracking-wider text-rose-500 mb-0.5">Rejection Reason</span>
+                              {req.rejectionReason}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Submitted Documents</h5>
+                          <div className="flex flex-wrap gap-2.5">
+                            {req.type === 'identity' && (
+                              <>
+                                {req.frontUrl && (
+                                  <div className="flex-1 min-w-[120px] bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center flex flex-col justify-between">
+                                    <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1.5">ID Front</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingDocUrl(req.frontUrl)}
+                                      className="h-14 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center hover:opacity-85 transition-all group"
+                                    >
+                                      <img src={req.frontUrl} alt="ID Front" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                    </button>
+                                  </div>
+                                )}
+                                {req.backUrl && (
+                                  <div className="flex-1 min-w-[120px] bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center flex flex-col justify-between">
+                                    <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1.5">ID Back</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingDocUrl(req.backUrl)}
+                                      className="h-14 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center hover:opacity-85 transition-all group"
+                                    >
+                                      <img src={req.backUrl} alt="ID Back" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                    </button>
+                                  </div>
+                                )}
+                                {req.selfieUrl && (
+                                  <div className="flex-1 min-w-[120px] bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center flex flex-col justify-between">
+                                    <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1.5">Selfie</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingDocUrl(req.selfieUrl)}
+                                      className="h-14 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center hover:opacity-85 transition-all group"
+                                    >
+                                      <img src={req.selfieUrl} alt="Selfie" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {req.type === 'business' && req.cipcUrl && (
+                              <div className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between gap-2">
+                                <div className="truncate">
+                                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-0.5">CIPC Certificate Document</span>
+                                  <span className="text-xs text-slate-700 font-bold block truncate">{req.bizRegNumber || 'CIPC-Registration'}.pdf</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingDocUrl(req.cipcUrl)}
+                                  className="px-3.5 py-1.5 bg-brand hover:bg-brand-hover text-white rounded-lg text-[10px] font-black shadow-xs whitespace-nowrap cursor-pointer"
+                                >
+                                  View / Download PDF
+                                </button>
+                              </div>
+                            )}
+
+                            {req.type === 'credentials' && req.credFileUrl && (
+                              <div className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between gap-2">
+                                <div className="truncate">
+                                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-0.5">Trade Certificate File</span>
+                                  <span className="text-xs text-slate-700 font-bold block truncate">{req.credFileName || 'trade-credential.pdf'}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingDocUrl(req.credFileUrl)}
+                                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black shadow-xs whitespace-nowrap cursor-pointer"
+                                >
+                                  View Certificate
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      {req.status === 'pending' && (
+                        <div className="flex gap-2.5 justify-end pt-3 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setRejectingReqId(req.id)}
+                            className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-150 rounded-xl text-[10px] font-black shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" /> Decline Request
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => approveVerificationRequest(req.id, req.userId, req.type)}
+                            className="px-5 py-2 bg-emerald-500 hover:bg-emerald-450 text-zinc-950 rounded-xl text-[10px] font-black shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Approve & Verify
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-20 text-center bg-white rounded-3xl border border-slate-150 p-6 shadow-sm">
+                  <Shield className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-xs font-bold text-slate-700">No verification requests found</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Users haven't submitted any verification requests matching these filters yet.</p>
                 </div>
               )}
             </motion.div>
@@ -891,6 +1162,145 @@ export default function AdminCategoryModeration() {
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-600/10 flex items-center justify-center"
                 >
                   {isSubmitting ? 'Approving...' : 'Approve & Release'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🖼️ DOCUMENT PREVIEW LIGHTBOX MODAL */}
+      <AnimatePresence>
+        {viewingDocUrl && (
+          <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-4 w-full max-w-4xl shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden relative"
+            >
+              <button
+                onClick={() => setViewingDocUrl(null)}
+                className="absolute right-4 top-4 p-2 bg-slate-900 text-white rounded-full hover:bg-black transition-all z-10 cursor-pointer"
+                title="Close Lightbox"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-4 mt-8">
+                {viewingDocUrl.startsWith('data:application/pdf') || viewingDocUrl.includes('.pdf') ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-4 py-12">
+                    <Inbox className="w-16 h-16 text-slate-300" />
+                    <p className="text-xs font-bold text-slate-700">PDF Document Submitted</p>
+                    <a
+                      href={viewingDocUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-xs font-black rounded-xl shadow-md cursor-pointer"
+                    >
+                      Open Document in New Tab
+                    </a>
+                  </div>
+                ) : (
+                  <img
+                    src={viewingDocUrl}
+                    alt="Document Preview"
+                    className="max-h-[70vh] max-w-full object-contain rounded-lg"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ⚠️ DECLINE VERIFICATION MODAL */}
+      <AnimatePresence>
+        {rejectingReqId && (
+          <div className="fixed inset-0 bg-slate-950/40 z-50 flex items-center justify-center p-6 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 flex flex-col relative"
+            >
+              <button
+                onClick={() => { setRejectingReqId(null); setRejectionReason(''); }}
+                className="absolute right-4 top-4 p-1.5 bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="mb-4">
+                <h3 className="text-sm font-black text-slate-900">Decline Verification Request</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Please provide a reason to notify the user</p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Predefined Rejection Reasons
+                  </label>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {[
+                      'Incomplete document pages (ID back / front missing)',
+                      'The selfie does not match the photo on the identity card',
+                      'The CIPC certificate is expired or invalid',
+                      'The uploaded credentials file is not clear or unreadable',
+                      'The document does not match the user details'
+                    ].map((reason) => (
+                      <button
+                        key={reason}
+                        type="button"
+                        onClick={() => setRejectionReason(reason)}
+                        className={`text-left p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          rejectionReason === reason
+                            ? 'bg-rose-50 border-rose-300 text-rose-700'
+                            : 'border-slate-150 hover:bg-slate-50 text-slate-600'
+                        }`}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Or Enter Custom Reason
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Enter custom feedback reason here..."
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand focus:border-brand transition-all outline-none h-20 resize-none font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => { setRejectingReqId(null); setRejectionReason(''); }}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-150 text-slate-700 text-[10px] font-black rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!rejectionReason.trim()}
+                  onClick={async () => {
+                    const req = (verificationRequests || []).find(r => r.id === rejectingReqId);
+                    if (req) {
+                      await rejectVerificationRequest(req.id, req.userId, req.type, rejectionReason);
+                    }
+                    setRejectingReqId(null);
+                    setRejectionReason('');
+                  }}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-[10px] font-black rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Confirm Decline
                 </button>
               </div>
             </motion.div>

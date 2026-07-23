@@ -33,6 +33,7 @@ import { QrCode } from 'lucide-react';
 import CategoryIcon from './CategoryIcon';
 import PostServiceModal from './PostServiceModal';
 import { logError } from '../lib/logger';
+import RecommendationEngine from './RecommendationEngine';
 
 export const formatServicePrice = (srv: Service) => {
   const pType = srv.pricingType || (srv.priceUnit === 'night' ? 'day' : srv.priceUnit === 'hr' ? 'hour' : srv.priceUnit) || 'fixed';
@@ -167,14 +168,37 @@ export function ServiceCard({ srv, triggerSound, toggleSaveItem, isSavedItem, on
             onClick={(e) => {
               e.stopPropagation();
               triggerSound('click');
+              const shareTitle = srv.title;
+              const shareText = `Check out this service: ${srv.title}`;
+              const shareUrl = window.location.href;
+              
               if (navigator.share) {
                 navigator.share({
-                  title: srv.title,
-                  text: `Check out this service: ${srv.title}`,
-                  url: window.location.href,
-                }).catch((error) => console.log('Error sharing', error));
+                  title: shareTitle,
+                  text: shareText,
+                  url: shareUrl,
+                }).catch((error) => {
+                  console.log('Error sharing', error);
+                  if (error.name !== 'AbortError') {
+                    copyToClipboard(`${shareTitle} - ${shareText}\n${shareUrl}`)
+                      .then((success) => {
+                        if (success) {
+                          showToast('Link copied to clipboard!', 'success');
+                        } else {
+                          showToast('Sharing not supported on this device.', 'error');
+                        }
+                      });
+                  }
+                });
               } else {
-                showToast('Sharing is not supported on this device.', 'error');
+                copyToClipboard(`${shareTitle} - ${shareText}\n${shareUrl}`)
+                  .then((success) => {
+                    if (success) {
+                      showToast('Link copied to clipboard!', 'success');
+                    } else {
+                      showToast('Sharing not supported on this device.', 'error');
+                    }
+                  });
               }
             }}
             className="p-2 bg-white/95 backdrop-blur-sm rounded-full shadow-md hover:bg-white transition-all text-neutral-600 flex items-center justify-center border border-neutral-100 cursor-pointer active:scale-90"
@@ -288,6 +312,40 @@ export function ServiceCard({ srv, triggerSound, toggleSaveItem, isSavedItem, on
   );
 }
 
+export const copyToClipboard = (text: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => resolve(true))
+        .catch(() => {
+          resolve(fallbackCopyToClipboard(text));
+        });
+    } else {
+      resolve(fallbackCopyToClipboard(text));
+    }
+  });
+};
+
+const fallbackCopyToClipboard = (text: string): boolean => {
+  try {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return successful;
+  } catch (err) {
+    console.error('Fallback copy failed', err);
+    return false;
+  }
+};
+
 export default function HomeFeed() {
   const {
     services,
@@ -324,15 +382,35 @@ export default function HomeFeed() {
   //
 
   const handleShare = (title: string, text: string) => {
+    const shareUrl = window.location.href;
+    const shareText = `${title} - ${text}`;
     if (navigator.share) {
       navigator.share({
         title,
         text,
-        url: window.location.href,
-      }).catch(logError);
+        url: shareUrl,
+      }).catch((err) => {
+        logError(err);
+        if (err.name !== 'AbortError') {
+          copyToClipboard(`${shareText}\n${shareUrl}`)
+            .then((success) => {
+              if (success) {
+                showToast('Link copied to clipboard!', 'success');
+              } else {
+                showToast('Failed to copy link.', 'error');
+              }
+            });
+        }
+      });
     } else {
-      navigator.clipboard.writeText(`${title} - ${window.location.href}`);
-      showToast('Link copied to clipboard!');
+      copyToClipboard(`${shareText}\n${shareUrl}`)
+        .then((success) => {
+          if (success) {
+            showToast('Link copied to clipboard!', 'success');
+          } else {
+            showToast('Failed to copy link.', 'error');
+          }
+        });
     }
   };
   
@@ -715,6 +793,14 @@ export default function HomeFeed() {
               + List a Service
             </button>
           </div>
+        </div>
+
+        {/* 🤖 PERSONALIZED RECOMMENDATION ENGINE */}
+        <div className="px-6 py-2">
+          <RecommendationEngine 
+            onSelectDoer={(doerId) => setFocusedDoerId(doerId)}
+            onSelectService={(service) => setSelectedService(service)}
+          />
         </div>
 
         {/* Property Feed List */}

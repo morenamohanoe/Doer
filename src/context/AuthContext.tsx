@@ -4,6 +4,7 @@ import { doc, onSnapshot, collection, setDoc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase';
 import { migrateExistingUser } from '../lib/migration';
 import { logError } from '../lib/logger';
+import { getProperAvatar } from '../utils/avatarUtils';
 
 interface AuthContextProps {
   user: (FirebaseUser & { role?: 'admin' | 'doer' }) | null;
@@ -92,41 +93,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     if (user) {
-      if (user.email === 'morenamohanoe@gmail.com') {
-        const initAdminRole = async () => {
-          try {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              const data = userDocSnap.data();
-              if (!data.roleInitialized) {
-                await setDoc(userDocRef, {
-                  role: 'admin',
-                  roleInitialized: true
-                }, { merge: true });
-                console.log("[AuthContext] Initialized admin role for morenamohanoe@gmail.com");
-              }
-            } else {
-              await setDoc(userDocRef, {
-                uid: user.uid,
-                email: user.email || '',
-                role: 'admin',
-                roleInitialized: true,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              }, { merge: true });
-              console.log("[AuthContext] Pre-created admin user document for morenamohanoe@gmail.com");
-            }
-          } catch (e) {
-            logError("Failed to initialize admin role for morenamohanoe@gmail.com:", e);
-          }
-        };
-        initAdminRole();
-      }
+      const initUserData = async () => {
+        // Mock document initialization removed to prevent hardcoded user data
+        // Profiles should be created during the registration flow, not forcefully initialized here.
+        // If a user signs in with a provider like Google, they should be redirected to an onboarding flow.
+      };
+      initUserData();
 
       unsubscribeProfile = onSnapshot(doc(collection(db, 'users'), user.uid), async (document) => {
         if (document.exists()) {
           const data = document.data();
+          
+          // Auto-fix Volkswagen or static generic fallback avatar if found in Firestore
+          const fullName = [data.firstName, data.lastName].filter(Boolean).join(' ').trim() || data.displayName;
+          const properAvatar = getProperAvatar(data.avatarUrl, fullName, user.uid, data.gender);
+          if (data && (!data.avatarUrl || data.avatarUrl.includes('1599305445671-ac291c95aaa9') || data.avatarUrl.includes('photo-1534528741775-53994a69daeb'))) {
+            data.avatarUrl = properAvatar;
+            try {
+              await setDoc(doc(db, 'users', user.uid), { avatarUrl: properAvatar }, { merge: true });
+              console.log("[AuthContext] Repaired user avatar in Firestore with clean personalized avatar.");
+            } catch (err) {
+              console.error("[AuthContext] Failed to repair user avatar in Firestore:", err);
+            }
+          }
+          
           setProfile(data);
           const currentRole = data.role || 'doer';
           setIsAdmin(currentRole === 'admin');

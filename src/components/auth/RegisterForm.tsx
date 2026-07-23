@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { logWarn } from '../../lib/logger';
+import { getProperAvatar } from '../../utils/avatarUtils';
 
 interface RegisterFormProps {
   onBack: () => void;
@@ -40,7 +41,7 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
   const [customProfileUrl, setCustomProfileUrl] = useState('');
 
   const getActiveProfilePreview = () => {
-    return customProfileUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
+    return getProperAvatar(customProfileUrl, `${formData.firstName} ${formData.lastName}`.trim(), '', formData.gender);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -91,7 +92,7 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
     setErrorMsg('');
 
     try {
-      const avatarUrl = customProfileUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
+      const avatarUrl = getProperAvatar(customProfileUrl, `${formData.firstName} ${formData.lastName}`.trim(), '', formData.gender);
 
       // 1. Create auth user
       const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
@@ -118,8 +119,8 @@ export default function RegisterForm({ onBack }: RegisterFormProps) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         profileCompleted: false, // Onboarding needed
-        role: formData.email.toLowerCase().trim() === 'morenamohanoe@gmail.com' ? 'admin' : 'doer',
-        roleInitialized: formData.email.toLowerCase().trim() === 'morenamohanoe@gmail.com' ? true : false
+        role: 'doer',
+        roleInitialized: false
       };
 
       const cleanUserPayload: Record<string, any> = {};

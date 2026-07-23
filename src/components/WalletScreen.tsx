@@ -24,6 +24,7 @@ import { GeometricDivider } from './GeometricDivider';
 import { QRCodeSVG } from 'qrcode.react';
 import QRCodeScannerModal from './QRCodeScannerModal';
 import EarningsPieChart from './EarningsPieChart';
+import EarningsWithdrawalBarChart from './EarningsWithdrawalBarChart';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { logError, logWarn } from '../lib/logger';
 
@@ -606,6 +607,13 @@ Secured by DOER Escrow Services.
             </div>
           </div>
         )}
+
+        <EarningsWithdrawalBarChart 
+          serviceRequests={serviceRequests}
+          p2pTransfers={p2pTransfers}
+          withdrawals={withdrawals}
+          currentUserId={currentUser?.id || ''}
+        />
 
         <motion.div
           className="bg-white p-5 geom-card border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-lg transition-all duration-300"

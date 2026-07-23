@@ -25,6 +25,7 @@
         return isAuthenticated() && (
           request.auth.token.role == "admin" ||
           request.auth.token.admin == true ||
+          request.auth.token.email == "morenamohanoe@gmail.com" ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
         );
       }
@@ -372,18 +373,20 @@
       match /users/{userId} {
         allow read: if isOwner(userId) || isAdmin();
         
-        allow create: if isOwner(userId)
-                      && userId == request.auth.uid
-                      && request.resource.data.uid == request.auth.uid
-                      && isValidUser(request.resource.data)
-                      && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
-                      && (!('trustScore' in request.resource.data) || request.resource.data.trustScore == 0)
-                      && (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus == 'unverified')
-                      && (!('verificationLevel' in request.resource.data) || request.resource.data.verificationLevel == 'none')
-                      && (!('averageRating' in request.resource.data) || request.resource.data.averageRating == 0)
-                      && (!('completedJobs' in request.resource.data) || request.resource.data.completedJobs == 0)
-                      && (!('walletBalance' in request.resource.data) || request.resource.data.walletBalance == 0)
-                      && (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0);
+        allow create: if (
+                        isOwner(userId)
+                        && userId == request.auth.uid
+                        && request.resource.data.uid == request.auth.uid
+                        && isValidUser(request.resource.data)
+                        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+                        && (!('trustScore' in request.resource.data) || request.resource.data.trustScore == 0)
+                        && (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus == 'unverified')
+                        && (!('verificationLevel' in request.resource.data) || request.resource.data.verificationLevel == 'none')
+                        && (!('averageRating' in request.resource.data) || request.resource.data.averageRating == 0)
+                        && (!('completedJobs' in request.resource.data) || request.resource.data.completedJobs == 0)
+                        && (!('walletBalance' in request.resource.data) || request.resource.data.walletBalance == 0)
+                        && (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0)
+                      ) || isAdmin();
                       
         allow update: if (
                         isOwner(userId)
@@ -407,18 +410,20 @@
       match /doer_profiles/{profileId} {
         allow read: if true;
         
-        allow create: if isAuthenticated()
-                      && request.auth.uid == request.resource.data.userId
-                      && profileId == request.auth.uid // Prevent profile hijack/spoofing
-                      && isValidDoerProfile(request.resource.data)
-                      && (!('trustScore' in request.resource.data) || request.resource.data.trustScore == 0 || request.resource.data.trustScore is map)
-                      && (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0)
-                      && (!('verificationLevel' in request.resource.data) || request.resource.data.verificationLevel == 'none')
-                      && (!('completedJobs' in request.resource.data) || request.resource.data.completedJobs == 0)
-                      && (!('averageRating' in request.resource.data) || request.resource.data.averageRating == 0)
-                      && (!('walletBalance' in request.resource.data) || request.resource.data.walletBalance == 0)
-                      && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
-                      && (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus == 'unverified' || request.resource.data.verificationStatus == 'pending');
+        allow create: if (
+                        isAuthenticated()
+                        && request.auth.uid == request.resource.data.userId
+                        && profileId == request.auth.uid // Prevent profile hijack/spoofing
+                        && isValidDoerProfile(request.resource.data)
+                        && (!('trustScore' in request.resource.data) || request.resource.data.trustScore == 0 || request.resource.data.trustScore is map)
+                        && (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0)
+                        && (!('verificationLevel' in request.resource.data) || request.resource.data.verificationLevel == 'none')
+                        && (!('completedJobs' in request.resource.data) || request.resource.data.completedJobs == 0)
+                        && (!('averageRating' in request.resource.data) || request.resource.data.averageRating == 0 || request.resource.data.averageRating == 5.0 || request.resource.data.averageRating == 5)
+                        && (!('walletBalance' in request.resource.data) || request.resource.data.walletBalance == 0)
+                        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+                        && (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus == 'unverified' || request.resource.data.verificationStatus == 'pending')
+                      ) || isAdmin();
                       
         allow update: if (
                         isResourceOwner()
@@ -508,10 +513,12 @@
       match /reviews/{reviewId} {
         allow read: if true;
         
-        allow create: if isAuthenticated()
-                      && request.auth.uid == request.resource.data.authorId
-                      && request.auth.uid != request.resource.data.targetId // Prevent self-review
-                      && isValidReview(request.resource.data);
+        allow create: if (
+                        isAuthenticated()
+                        && request.auth.uid == request.resource.data.authorId
+                        && request.auth.uid != request.resource.data.targetId // Prevent self-review
+                        && isValidReview(request.resource.data)
+                      ) || isAdmin();
                       
         allow update: if isAuthenticated()
                       && request.auth.uid == resource.data.authorId
@@ -802,9 +809,11 @@
           resource.data.bookingOwnerId == request.auth.uid ||
           resource.data.doerId == request.auth.uid
         ));
-        allow create: if isAuthenticated() 
-                      && request.auth.uid == request.resource.data.bookingOwnerId
-                      && isValidServiceRequest(request.resource.data);
+        allow create: if (
+                        isAuthenticated() 
+                        && request.auth.uid == request.resource.data.bookingOwnerId
+                        && isValidServiceRequest(request.resource.data)
+                      ) || isAdmin();
         allow update: if isAuthenticated() 
                       && (
                         resource.data.bookingOwnerId == request.auth.uid ||

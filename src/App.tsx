@@ -6,6 +6,7 @@ import { logWarn } from './lib/logger';
 
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { getProperAvatar } from './utils/avatarUtils';
 import { useAuth } from './context/AuthContext';
 import Onboarding from './components/Onboarding';
 import Welcome from './components/auth/Welcome';
@@ -422,14 +423,15 @@ function AppContent() {
     } else if (item.itemType === 'doer') {
       const dr = roleProfiles.find((r: any) => r.id === item.itemId);
       if (!dr) return null;
-      const avatar = dr.avatarUrl || dr.profileImageUrl || (dr.id === 'doer-1' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&fit=crop&q=80' : dr.id === 'doer-2' ? 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&fit=crop&q=80' : dr.id === 'doer-4' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80' : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&fit=crop&q=80');
-      const name = dr.id === 'doer-1' ? 'Sipho Ngwenya' : dr.id === 'doer-2' ? 'Anika van der Merwe' : dr.id === 'doer-3' ? 'David Nkosi' : dr.id === 'doer-4' ? 'Naledi Khumalo' : (dr.displayName || 'Freelancer');
+      const name = dr.displayName || (dr.id === 'doer-1' ? 'Sipho Ngwenya' : dr.id === 'doer-2' ? 'Anika van der Merwe' : dr.id === 'doer-3' ? 'David Nkosi' : dr.id === 'doer-4' ? 'Naledi Khumalo' : 'Service Doer');
+      const avatar = getProperAvatar(dr.profileImageUrl || dr.avatarUrl, name, dr.id || dr.userId, dr.gender);
+      const location = dr.location || dr.locationName || (dr.city ? `${dr.city}${dr.province ? ', ' + dr.province : ''}` : 'South Africa');
       return {
         id: dr.id,
         type: 'doer' as const,
         title: name,
         price: dr.trustScore?.score || 50,
-        location: dr.locationName || 'South Africa',
+        location,
         image: avatar,
         description: dr.bio || dr.personalTagline || 'No bio provided.',
         doerName: name,
@@ -577,7 +579,7 @@ function AppContent() {
             className="w-8 h-8 rounded-full border-2 border-zinc-700 overflow-hidden cursor-pointer active:scale-95 transition-all"
           >
             <img 
-              src={currentUser?.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80"}
+              src={getProperAvatar(currentUser?.avatarUrl, `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim(), currentUser?.id, currentUser?.gender)}
               alt="Profile"
               className="w-full h-full object-cover"
             />
@@ -933,7 +935,7 @@ function AppContent() {
                     {/* Doer / Seller Card */}
                     <div className="flex items-center gap-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-100">
                       <img 
-                        src={selectedSavedDetail.doerAvatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80"} 
+                        src={getProperAvatar(selectedSavedDetail.doerAvatar, selectedSavedDetail.doerName, selectedSavedDetail.id)} 
                         alt={selectedSavedDetail.doerName}
                         className="w-10 h-10 rounded-full object-cover border border-slate-200"
                       />

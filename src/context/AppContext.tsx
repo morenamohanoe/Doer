@@ -1,4 +1,5 @@
 import { logError, logWarn } from '../lib/logger';
+import { getProperAvatar } from '../utils/avatarUtils';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -115,7 +116,7 @@ interface AppContextProps {
   requestWithdrawal: (amount: number, bankName: string, accountNumber: string) => boolean;
   topUpWallet: (amount: number) => void;
   transferFunds: (recipientId: string, recipientName: string, amount: number, reference: string) => Promise<boolean>;
-  submitVerification: (type: 'identity' | 'business') => void;
+  submitVerification: (type: 'identity' | 'business' | 'credentials', data: any) => Promise<void>;
   markAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   clearNotification: (id: string) => void;
@@ -136,6 +137,8 @@ interface AppContextProps {
   ) => void;
   incrementProjectViews: (projectId: string) => void;
   approveProjectVerification: (projectId: string) => void;
+  approveVerificationRequest: (requestId: string, userId: string, type: 'identity' | 'business' | 'credentials') => Promise<void>;
+  rejectVerificationRequest: (requestId: string, userId: string, type: 'identity' | 'business' | 'credentials', reason?: string) => Promise<void>;
   savedItems: SavedItem[];
   toggleSaveItem: (itemType: 'service' | 'product' | 'doer', itemId: string) => void;
   removeSavedItemsBatch: (items: { itemType: 'service' | 'product' | 'doer'; itemId: string }[]) => void;
@@ -250,6 +253,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { profile, profileLoading } = useAuth(); // Get from AuthContext
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // One-time cleanup script for mock data
+  useEffect(() => {
+    if (user) {
+      const cleanupMockData = async () => {
+        try {
+          // Cleanup mock doer profile
+          const doerRef = firestore.doc(db, 'doer_profiles', user.uid);
+          const snap = await firestore.getDoc(doerRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.bio === 'Experienced local professional offering top-tier services.' || data.id === 'my-doer-profile') {
+              await firestore.deleteDoc(doerRef);
+              console.log('Cleaned up mock doer profile from Firestore');
+              
+              // Remove locally cached mock profiles
+              const storedProfiles = localStorage.getItem('doer_profiles');
+              if (storedProfiles) {
+                 const parsed = JSON.parse(storedProfiles);
+                 const filtered = parsed.filter((p: any) => p.id !== 'my-doer-profile' && p.bio !== 'Experienced local professional offering top-tier services.');
+                 localStorage.setItem('doer_profiles', JSON.stringify(filtered));
+              }
+              // Force a page reload to clear out any memory-cached instances
+              window.location.reload();
+            }
+          }
+
+          // Cleanup mock portfolio project
+          const portRef = firestore.doc(db, 'portfolio_projects', `port-${user.uid}-1`);
+          const portSnap = await firestore.getDoc(portRef);
+          if (portSnap.exists() && portSnap.data()?.title === 'Puma Kidsuper Borussia Dortmund Replica Jersey Showcase') {
+            await firestore.deleteDoc(portRef);
+            console.log('Cleaned up mock portfolio project from Firestore');
+          }
+
+          // Cleanup mock service request
+          const reqRef = firestore.doc(db, 'service_requests', `req-${user.uid}-1`);
+          const reqSnap = await firestore.getDoc(reqRef);
+          if (reqSnap.exists() && reqSnap.data()?.title === 'Puma Apparel Customization & Delivery') {
+            await firestore.deleteDoc(reqRef);
+            console.log('Cleaned up mock service request from Firestore');
+          }
+
+          // Cleanup mock review
+          const revRef = firestore.doc(db, 'reviews', `rev-${user.uid}-1`);
+          const revSnap = await firestore.getDoc(revRef);
+          if (revSnap.exists() && revSnap.data()?.comment === 'Excellent work, fast delivery and authentic item!') {
+            await firestore.deleteDoc(revRef);
+            console.log('Cleaned up mock review from Firestore');
+          }
+        } catch(e) {
+          console.error('Failed to run mock data cleanup', e);
+        }
+      };
+      cleanupMockData();
+    }
+  }, [user]);
+
   // Search, category, and location filters for dynamic SEO and feeds
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -288,37 +348,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Database states initialized from seed or localstorage
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const stored = localStorage.getItem('doer_user');
-    if (stored) return JSON.parse(stored);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.firstName && parsed.firstName !== 'Current') {
+        if (parsed.avatarUrl && (parsed.avatarUrl.includes('1599305445671-ac291c95aaa9') || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb'))) {
+          parsed.avatarUrl = getProperAvatar('', `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || parsed.displayName, parsed.id || parsed.uid, parsed.gender);
+        }
+        return parsed;
+      }
+    }
     return {
-      id: 'current-user-uuid',
+      id: '',
+      uid: '',
       email: '',
-      phoneNumber: '',
       firstName: '',
       lastName: '',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&fit=crop&q=80',
-      verificationStatus: 'unverified',
+      displayName: '',
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      locationName: 'Johannesburg'
+      updatedAt: new Date().toISOString()
     };
   });
 
   const [currentRoles, setCurrentRoles] = useState<UserRole[]>(() => {
     const stored = localStorage.getItem('doer_user_roles');
-    if (stored) return JSON.parse(stored);
-    return [
-      {
-        id: 'role-doer-1',
-        userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-        role: 'doer',
-        isActive: true,
-        isPrimary: true,
-        activatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      }
-    ];
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed[0]?.displayName && parsed[0]?.displayName !== 'Current User') return parsed;
+    }
+    return [];
   });
 
   const [activeRole, setActiveRole] = useState<UserRoleType>(() => {
@@ -327,47 +384,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [roleProfiles, setRoleProfiles] = useState<RoleProfile[]>(() => {
     const stored = localStorage.getItem('doer_profiles');
-    if (stored) return JSON.parse(stored);
-    
-    // Add current user's default profiles
-    const myProfiles: RoleProfile[] = [
-      {
-        id: 'my-doer-profile',
-        userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-        role: 'doer',
-        title: 'Freelance Professional',
-        bio: 'Ready to offer outstanding local services and help people get things done!',
-        hourlyRate: 150,
-        rating: 0,
-        reviewCount: 0,
-        completedJobsCount: 0,
-        salesCount: 0,
-        completionRate: 100,
-        location: 'Sandton, Johannesburg',
-        skills: [],
-        bannerColor: 'from-blue-500 to-teal-500',
-        trustScore: { score: 10, verificationScore: 10, reputationScore: 0, reliabilityScore: 0, activityScore: 0, level: 'New User' }
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Filter out any mock profiles
+      const filtered = parsed.filter((p: any) => p.id !== 'my-doer-profile' && p.bio !== 'Experienced local professional offering top-tier services.');
+      if (filtered.length > 0 && filtered[0]?.displayName && filtered[0]?.displayName !== 'Current User' && filtered[0]?.displayName !== 'Doer') {
+        return filtered.map((p: any) => {
+          if (!p.profileImageUrl || p.profileImageUrl.includes('1599305445671-ac291c95aaa9') || p.profileImageUrl.includes('photo-1534528741775-53994a69daeb')) {
+            p.profileImageUrl = getProperAvatar('', p.displayName, p.id || p.userId, p.gender);
+          }
+          if (!p.avatarUrl || p.avatarUrl.includes('1599305445671-ac291c95aaa9') || p.avatarUrl.includes('photo-1534528741775-53994a69daeb')) {
+            p.avatarUrl = getProperAvatar('', p.displayName, p.id || p.userId, p.gender);
+          }
+          return p;
+        });
       }
-    ];
-    return [...myProfiles, ];
+    }
+    
+    return [];
   });
   const [roleProgressions, setRoleProgressions] = useState<RoleProgression[]>(() => {
     const stored = localStorage.getItem('doer_progressions');
-    if (stored) return JSON.parse(stored);
-    return [
-      {
-        id: 'prog-doer',
-        userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-        role: 'doer',
-        currentLevel: 'Doer',
-        nextLevelRequirements: { jobsNeeded: 10, trustScoreNeeded: 70, ratingNeeded: 4.5, identityVerifiedNeeded: true },
-        progressPercent: 20
-      },
-    ];
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed[0]?.displayName && parsed[0]?.displayName !== 'Current User') return parsed;
+    }
+    return [];
   });
 
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
@@ -477,7 +519,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           firstName: profile.firstName || '',
           middleName: profile.middleName || '',
           lastName: profile.lastName || '',
-          avatarUrl: profile.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80',
+          avatarUrl: getProperAvatar(profile.avatarUrl, `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || user.displayName, user.uid, profile.gender),
           verificationStatus: profile.verificationStatus || 'unverified',
           createdAt: profile.createdAt || prev.createdAt,
           updatedAt: profile.updatedAt || new Date().toISOString(),
@@ -522,119 +564,168 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, profile]);
 
+  const [usersMap, setUsersMap] = useState<Record<string, any>>({});
+
+  // Sync users collection in real-time
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribeUsers = firestore.onSnapshot(
+      firestore.collection(db, 'users'),
+      (snapshot) => {
+        const map: Record<string, any> = {};
+        snapshot.forEach((docSnap) => {
+          map[docSnap.id] = docSnap.data();
+        });
+        setUsersMap(map);
+      },
+      (error) => {
+        console.warn("[AppContext] Error reading users collection:", error);
+      }
+    );
+
+    return () => unsubscribeUsers();
+  }, [user]);
+
   // Sync doer_profiles and user_verifications in real-time
   useEffect(() => {
     if (!user) return;
 
     const unsubscribeDoer = firestore.onSnapshot(
-      firestore.doc(db, 'doer_profiles', user.uid),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setRoleProfiles((prev) => {
-            const otherProfiles = prev.filter((p) => p.role !== 'doer' || p.userId !== user.uid);
-            
-            const skillsArray = Array.isArray(data.skills) ? data.skills : [];
-            const languagesArray = Array.isArray(data.languages) ? data.languages : [];
-            const categoriesArray = Array.isArray(data.categories) ? data.categories : [];
-            const servicesOfferedArray = Array.isArray(data.servicesOffered) ? data.servicesOffered : [];
+      firestore.collection(db, 'doer_profiles'),
+      (snapshot) => {
+        const doerProfiles: RoleProfile[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = { ...docSnap.data() };
+          const uid = docSnap.id;
+          const uDoc = usersMap[uid];
+          
+          // Auto-fix the Volkswagen avatar if found in doer profile
+          if (data && data.profileImageUrl && data.profileImageUrl.includes('1599305445671-ac291c95aaa9')) {
+            const cleanAvatar = (uid === user.uid && user.photoURL) ? user.photoURL : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
+            data.profileImageUrl = cleanAvatar;
+            if (uid === user.uid) {
+              firestore.setDoc(firestore.doc(db, 'doer_profiles', user.uid), { profileImageUrl: cleanAvatar }, { merge: true })
+                .catch(err => console.error("[AppContext] Failed to repair doer profile image in Firestore:", err));
+            }
+          }
+          
+          const skillsArray = Array.isArray(data.skills) ? data.skills : [];
+          const languagesArray = Array.isArray(data.languages) ? data.languages : [];
+          const categoriesArray = Array.isArray(data.categories) ? data.categories : [];
+          const servicesOfferedArray = Array.isArray(data.servicesOffered) ? data.servicesOffered : [];
 
-            const liveTrustScore = data.trustScore || {
-              score: 15,
-              level: 'New User',
-              verificationScore: 15,
-              reputationScore: 0,
-              reliabilityScore: 0,
-              activityScore: 0
-            };
+          const liveTrustScore = data.trustScore || {
+            score: 15,
+            level: 'New User',
+            verificationScore: 15,
+            reputationScore: 0,
+            reliabilityScore: 0,
+            activityScore: 0
+          };
 
-            const updatedDoerProfile: RoleProfile = {
-              id: user.uid,
-              uid: user.uid,
-              userId: user.uid,
-              role: 'doer',
-              displayName: data.displayName || `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Doer',
-              bio: data.bio || '',
-              occupation: data.occupation || '',
-              yearsOfExperience: Number(data.yearsOfExperience) || 0,
-              highestEducation: data.highestEducation || data.education || '',
-              skills: skillsArray,
-              languages: languagesArray,
-              categories: categoriesArray,
-              servicesOffered: servicesOfferedArray,
-              hourlyRate: Number(data.hourlyRate) || 150,
-              rating: Number(data.averageRating) || Number(data.rating) || 0.0,
-              reviewCount: Number(data.reviewCount) || 0,
-              completedJobsCount: Number(data.completedJobsCount) || 0,
-              salesCount: Number(data.salesCount) || 0,
-              completionRate: 100,
-              location: profile?.city ? `${profile.city}, ${profile.province || ''}` : (data.location || 'Johannesburg, Gauteng'),
-              bannerColor: data.bannerColor || 'from-zinc-800 to-zinc-950',
-              trustScore: liveTrustScore,
-              isActive: data.isActive !== false,
-              profileImageUrl: data.profileImageUrl || '',
-              coverImageUrl: data.coverImageUrl || '',
-              portfolioImages: Array.isArray(data.portfolioImages) ? data.portfolioImages : [],
-              portfolioVideos: Array.isArray(data.portfolioVideos) ? data.portfolioVideos : [],
-              projectLinks: Array.isArray(data.projectLinks) ? data.projectLinks : [],
-              linkedInUrl: data.linkedInUrl || '',
-              facebookUrl: data.facebookUrl || '',
-              instagramUrl: data.instagramUrl || '',
-              tiktokUrl: data.tiktokUrl || '',
-              xUrl: data.xUrl || '',
-              githubUrl: data.githubUrl || '',
-              youtubeUrl: data.youtubeUrl || '',
-              websiteUrl: data.websiteUrl || ''
-            };
+          const firstName = data.firstName || uDoc?.firstName || (uid === user.uid ? profile?.firstName : '') || '';
+          const lastName = data.lastName || uDoc?.lastName || (uid === user.uid ? profile?.lastName : '') || '';
+          const fullNameFromDoc = [firstName, lastName].filter(Boolean).join(' ').trim();
 
-            return [...otherProfiles, updatedDoerProfile];
-          });
-        }
+          let computedDisplayName = (
+            data.displayName && !['Doer', 'Freelancer', 'User', 'freelancer'].includes(data.displayName)
+          ) ? data.displayName : (
+            (uDoc?.displayName && !['Doer', 'Freelancer', 'User', 'freelancer'].includes(uDoc.displayName))
+              ? uDoc.displayName
+              : (fullNameFromDoc || data.fullName || uDoc?.fullName || data.name || uDoc?.name)
+          );
+
+          if (!computedDisplayName || ['Doer', 'Freelancer', 'User', 'freelancer'].includes(computedDisplayName)) {
+            if (uid === user.uid && profile) {
+              computedDisplayName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
+            }
+            if (!computedDisplayName && uDoc?.email) {
+              const namePart = uDoc.email.split('@')[0];
+              computedDisplayName = namePart.replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+            }
+            if (!computedDisplayName && (data.occupation || uDoc?.occupation)) {
+              const occ = data.occupation || uDoc?.occupation;
+              computedDisplayName = occ ? `${occ} Specialist` : 'Verified Professional';
+            }
+            if (!computedDisplayName) {
+              computedDisplayName = 'Verified Provider';
+            }
+          }
+
+          const rawAvatar = data.profileImageUrl || uDoc?.avatarUrl || uDoc?.profileImageUrl || (uid === user.uid ? (user.photoURL || profile?.avatarUrl) : '') || '';
+          const computedGender = data.gender || uDoc?.gender || (uid === user.uid ? profile?.gender : '') || '';
+          const computedAvatar = getProperAvatar(rawAvatar, computedDisplayName, uid, computedGender);
+          const computedLocation = data.location || (uDoc?.city ? `${uDoc.city}${uDoc.province ? ', ' + uDoc.province : ''}` : uDoc?.location) || (uid === user.uid && profile?.city ? `${profile.city}, ${profile.province || ''}` : 'Johannesburg, Gauteng');
+          const computedOccupation = data.occupation || uDoc?.occupation || uDoc?.title || data.title || '';
+
+          const updatedDoerProfile: RoleProfile = {
+            id: uid,
+            uid: uid,
+            userId: uid,
+            role: 'doer',
+            displayName: computedDisplayName,
+            bio: data.bio || uDoc?.bio || '',
+            occupation: computedOccupation,
+            yearsOfExperience: Number(data.yearsOfExperience) || Number(uDoc?.yearsOfExperience) || 0,
+            highestEducation: data.highestEducation || data.education || uDoc?.highestEducation || '',
+            skills: skillsArray.length > 0 ? skillsArray : (uDoc?.skills || []),
+            languages: languagesArray,
+            categories: categoriesArray,
+            servicesOffered: servicesOfferedArray,
+            hourlyRate: Number(data.hourlyRate) || Number(uDoc?.hourlyRate) || 150,
+            rating: Number(data.averageRating) || Number(data.rating) || Number(uDoc?.rating) || 0.0,
+            reviewCount: Number(data.reviewCount) || Number(uDoc?.reviewCount) || 0,
+            completedJobsCount: Number(data.completedJobsCount) || Number(uDoc?.completedJobsCount) || 0,
+            salesCount: Number(data.salesCount) || 0,
+            completionRate: 100,
+            location: computedLocation,
+            bannerColor: data.bannerColor || 'from-zinc-800 to-zinc-950',
+            trustScore: liveTrustScore,
+            isActive: data.isActive !== false,
+            profileImageUrl: computedAvatar,
+            coverImageUrl: data.coverImageUrl || uDoc?.coverImageUrl || '',
+            portfolioImages: Array.isArray(data.portfolioImages) ? data.portfolioImages : [],
+            portfolioVideos: Array.isArray(data.portfolioVideos) ? data.portfolioVideos : [],
+            projectLinks: Array.isArray(data.projectLinks) ? data.projectLinks : [],
+            linkedInUrl: data.linkedInUrl || '',
+            facebookUrl: data.facebookUrl || '',
+            instagramUrl: data.instagramUrl || '',
+            tiktokUrl: data.tiktokUrl || '',
+            xUrl: data.xUrl || '',
+            githubUrl: data.githubUrl || '',
+            youtubeUrl: data.youtubeUrl || '',
+            websiteUrl: data.websiteUrl || ''
+          };
+          doerProfiles.push(updatedDoerProfile);
+        });
+
+        setRoleProfiles((prev) => {
+          const otherProfiles = prev.filter((p) => p.role !== 'doer');
+          return [...otherProfiles, ...doerProfiles];
+        });
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, `doer_profiles/${user.uid}`);
+        handleFirestoreError(error, OperationType.GET, `doer_profiles`);
       }
     );
 
+    const qVer = isAdmin 
+      ? firestore.query(firestore.collection(db, 'verification_requests'))
+      : firestore.query(
+          firestore.collection(db, 'verification_requests'),
+          firestore.where('userId', '==', user.uid)
+        );
+
     const unsubscribeVer = firestore.onSnapshot(
-      firestore.doc(db, 'user_verifications', user.uid),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setVerificationRequests((prev) => {
-            const otherRequests = prev.filter((r) => r.userId !== user.uid);
-            const reqs: VerificationRequest[] = [];
-            
-            if (data.governmentIdUrl) {
-              reqs.push({
-                id: `ver-${user.uid}-id`,
-                userId: user.uid,
-                userName: `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Doer',
-                role: 'doer',
-                type: 'identity',
-                status: data.backgroundCheckStatus === 'approved' ? 'approved' : (data.backgroundCheckStatus === 'rejected' ? 'rejected' : 'pending'),
-                documentUrl: 'South African ID Card / Smart Card',
-                createdAt: data.createdAt || new Date().toISOString()
-              });
-            }
-
-            if (data.proofOfAddressUrl) {
-              reqs.push({
-                id: `ver-${user.uid}-poa`,
-                userId: user.uid,
-                userName: `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Doer',
-                role: 'doer',
-                type: 'business',
-                status: data.backgroundCheckStatus === 'approved' ? 'approved' : (data.backgroundCheckStatus === 'rejected' ? 'rejected' : 'pending'),
-                documentUrl: 'Proof of Address Document',
-                createdAt: data.createdAt || new Date().toISOString()
-              });
-            }
-
-            return [...otherRequests, ...reqs];
-          });
-        }
+      qVer,
+      (snapshot) => {
+        const reqs: VerificationRequest[] = [];
+        snapshot.forEach((doc) => {
+          reqs.push({ id: doc.id, ...doc.data() } as VerificationRequest);
+        });
+        setVerificationRequests(reqs);
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, `user_verifications/${user.uid}`);
+        handleFirestoreError(error, OperationType.GET, 'verification_requests');
       }
     );
 
@@ -764,7 +855,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubscribeSentTransfers();
       unsubscribeReceivedTransfers();
     };
-  }, [user, profile]);
+  }, [user, profile, isAdmin, usersMap]);
 
   const [products, setProducts] = useState<Product[]>(() => {
     const stored = localStorage.getItem('doer_products');
@@ -973,6 +1064,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         id: doc.id,
         ...doc.data()
       })) as Review[];
+      
       setReviews(allReviews);
       recalculateMyProfiles(undefined, allReviews);
     }, (error) => {
@@ -985,11 +1077,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem('doer_wallet');
     if (stored) return JSON.parse(stored);
     return {
-      id: 'wallet-uuid',
-      userId: 'current-user-uuid',
-        uid: 'current-user-uuid',
-        displayName: 'Current User',
-      balance: 0, // Starting balance ZAR R0
+      id: '',
+      userId: '',
+      uid: '',
+      displayName: '',
+      balance: 0,
       escrowBalance: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -1016,7 +1108,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>(() => {
     const stored = localStorage.getItem('doer_portfolio_projects');
-    if (stored) return JSON.parse(stored);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.length > 0) return parsed;
+    }
     return [];
   });
 
@@ -1187,6 +1282,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         id: doc.id,
         ...doc.data()
       } as PortfolioProject));
+      
       setPortfolioProjects(projects);
     }, (error) => {
       logError("Error fetching portfolio projects:", error);
@@ -2688,23 +2784,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- IDENTITY & BUSINESS VERIFICATION ---
-  const submitVerification = (type: 'identity' | 'business') => {
+  const submitVerification = async (type: 'identity' | 'business' | 'credentials', data: any) => {
+    if (!user) {
+      showToast('Please sign in to submit verifications.', 'warning');
+      return;
+    }
     triggerSound('success');
     
-    const newReq: VerificationRequest = {
-      id: `ver-${Date.now()}`,
-      userId: currentUser.id,
-      userName: `${currentUser.firstName} ${currentUser.lastName}`.trim() || 'John Doe',
-      role: activeRole,
-      type,
-      status: 'pending',
-      documentUrl: type === 'identity' ? 'South African ID Card / Smart Card' : 'CIPC Registration Certificate / Bank Confirmation Letter',
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const docId = `${type}-${user.uid}`;
+      const docRef = firestore.doc(db, 'verification_requests', docId);
 
-    setVerificationRequests((prev) => [newReq, ...prev]);
-    dispatchNotification('Verification Submitted! 🛡️', `Your ${type === 'identity' ? 'SA Smart ID' : 'CIPC business docs'} have been loaded. Admin will review within 2 hours.`, 'info');
-    showToast(`Verification documents uploaded! 🛡️`, 'success');
+      const payload: Partial<VerificationRequest> = {
+        id: docId,
+        userId: user.uid,
+        userName: `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'John Doe',
+        role: activeRole,
+        type,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        documentUrl: type === 'identity' 
+          ? 'South African ID Card / Smart Card' 
+          : type === 'business' 
+          ? 'CIPC Registration Certificate' 
+          : `Trade Credential: ${data.credName}`,
+        ...data
+      };
+
+      await firestore.setDoc(docRef, payload, { merge: true });
+
+      // Update user's fields in Firestore
+      const userRef = firestore.doc(db, 'users', user.uid);
+      if (type === 'identity') {
+        await firestore.updateDoc(userRef, {
+          verificationStatus: 'pending',
+          identityVerificationStatus: 'pending'
+        });
+      } else if (type === 'business') {
+        await firestore.updateDoc(userRef, {
+          verificationStatus: 'pending',
+          businessVerificationStatus: 'pending'
+        });
+      } else if (type === 'credentials') {
+        await firestore.updateDoc(userRef, {
+          'submittedCredentials.status': 'pending',
+          'submittedCredentials.name': data.credName,
+          'submittedCredentials.issuer': data.credIssuer,
+          'submittedCredentials.number': data.credNumber,
+          'submittedCredentials.fileName': data.credFileName,
+          'submittedCredentials.submittedAt': new Date().toISOString()
+        });
+      }
+
+      dispatchNotification(
+        'Verification Submitted! 🛡️',
+        `Your ${type === 'identity' ? 'SA Smart ID' : type === 'business' ? 'CIPC business docs' : 'trade credentials'} have been loaded. Admin will review within 2 hours.`,
+        'info'
+      );
+      showToast(`Verification submitted successfully! 🛡️`, 'success');
+    } catch (err: any) {
+      logError('Failed to submit verification:', err);
+      showToast(`Submission failed: ${err.message}`, 'error');
+    }
   };
 
   // --- REAL-TIME NOTIFICATIONS ---
@@ -3014,7 +3155,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     triggerSound('success');
     const projectId = firestore.doc(firestore.collection(db, 'portfolio_projects')).id;
     const activeProfile = roleProfiles.find((p) => p.role === activeRole && p.userId === currentUser.id);
-    const activeProfileId = activeProfile ? activeProfile.id : (currentUser?.id || 'my-doer-profile');
+    const activeProfileId = activeProfile ? activeProfile.id : (currentUser?.id || 'current-user-uuid');
 
     const newProject: PortfolioProject = {
       id: projectId,
@@ -3085,6 +3226,99 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => {
       recalculateMyProfiles();
     }, 100);
+  };
+
+  const approveVerificationRequest = async (requestId: string, userId: string, type: 'identity' | 'business' | 'credentials') => {
+    try {
+      triggerSound('success');
+      
+      const reqRef = firestore.doc(db, 'verification_requests', requestId);
+      await firestore.updateDoc(reqRef, {
+        status: 'approved',
+        updatedAt: new Date().toISOString()
+      });
+
+      const userRef = firestore.doc(db, 'users', userId);
+      if (type === 'identity') {
+        await firestore.updateDoc(userRef, {
+          verificationStatus: 'identity_verified',
+          identityVerificationStatus: 'approved'
+        });
+      } else if (type === 'business') {
+        await firestore.updateDoc(userRef, {
+          verificationStatus: 'business_verified',
+          businessVerificationStatus: 'approved'
+        });
+      } else if (type === 'credentials') {
+        await firestore.updateDoc(userRef, {
+          'submittedCredentials.status': 'approved',
+          credentialsVerified: true,
+          verificationStatus: 'credentials_verified'
+        });
+      }
+
+      const notifRef = firestore.doc(firestore.collection(db, 'notifications'));
+      await firestore.setDoc(notifRef, {
+        id: notifRef.id,
+        userId,
+        title: 'Verification Approved! 🛡️',
+        message: `Your South African ${type === 'identity' ? 'Identity' : type === 'business' ? 'Business Registration' : 'Trade Credentials'} verification request has been successfully approved!`,
+        type: 'success',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      });
+
+      showToast('Verification request approved successfully! 🛡️', 'success');
+    } catch (err: any) {
+      logError('Failed to approve verification request:', err);
+      showToast(`Approval failed: ${err.message}`, 'error');
+    }
+  };
+
+  const rejectVerificationRequest = async (requestId: string, userId: string, type: 'identity' | 'business' | 'credentials', reason: string = 'Incomplete or unreadable documents') => {
+    try {
+      triggerSound('click');
+      
+      const reqRef = firestore.doc(db, 'verification_requests', requestId);
+      await firestore.updateDoc(reqRef, {
+        status: 'rejected',
+        rejectionReason: reason,
+        updatedAt: new Date().toISOString()
+      });
+
+      const userRef = firestore.doc(db, 'users', userId);
+      if (type === 'identity') {
+        await firestore.updateDoc(userRef, {
+          verificationStatus: 'unverified',
+          identityVerificationStatus: 'rejected'
+        });
+      } else if (type === 'business') {
+        await firestore.updateDoc(userRef, {
+          verificationStatus: 'unverified',
+          businessVerificationStatus: 'rejected'
+        });
+      } else if (type === 'credentials') {
+        await firestore.updateDoc(userRef, {
+          'submittedCredentials.status': 'rejected'
+        });
+      }
+
+      const notifRef = firestore.doc(firestore.collection(db, 'notifications'));
+      await firestore.setDoc(notifRef, {
+        id: notifRef.id,
+        userId,
+        title: 'Verification Request Rejected ⚠️',
+        message: `Your South African ${type === 'identity' ? 'Identity' : type === 'business' ? 'Business Registration' : 'Trade Credentials'} verification request was declined. Reason: ${reason}. Please re-submit correct documents.`,
+        type: 'alert',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      });
+
+      showToast('Verification request rejected.', 'info');
+    } catch (err: any) {
+      logError('Failed to reject verification request:', err);
+      showToast(`Rejection failed: ${err.message}`, 'error');
+    }
   };
 
   const [activeSystemReminders, setActiveSystemReminders] = useState<any[]>([]);
@@ -3223,6 +3457,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addPortfolioProject,
         incrementProjectViews,
         approveProjectVerification,
+        approveVerificationRequest,
+        rejectVerificationRequest,
         savedItems,
         toggleSaveItem,
         removeSavedItemsBatch,

@@ -10,7 +10,8 @@ import {
   Filter, 
   ArrowUpDown, 
   Download, 
-  ShieldCheck
+  ShieldCheck,
+  MapPin
 } from 'lucide-react';
 import { AdminAnalyticsData } from '../../../hooks/useAdminAnalyticsData';
 
@@ -33,10 +34,24 @@ export const AdminUserInsightsSection: React.FC<AdminUserInsightsSectionProps> =
         const matchesSearch = 
           u.fullName.toLowerCase().includes(search.toLowerCase()) ||
           u.email.toLowerCase().includes(search.toLowerCase()) ||
-          u.uid.toLowerCase().includes(search.toLowerCase());
+          u.uid.toLowerCase().includes(search.toLowerCase()) ||
+          (u.location && u.location.toLowerCase().includes(search.toLowerCase()));
 
         const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-        const matchesVerification = verificationFilter === 'all' || u.verificationStatus === verificationFilter;
+        
+        const isUserVerified = 
+          u.verificationStatus === 'verified' || 
+          u.verificationStatus === 'identity_verified' || 
+          u.verificationStatus === 'business_verified' || 
+          u.verificationStatus === 'credentials_verified' || 
+          u.verificationStatus === 'phone_verified';
+
+        const matchesVerification = 
+          verificationFilter === 'all' ||
+          (verificationFilter === 'verified' && isUserVerified) ||
+          (verificationFilter === 'unverified' && (u.verificationStatus === 'unverified' || !u.verificationStatus)) ||
+          (verificationFilter === 'pending' && u.verificationStatus === 'pending') ||
+          u.verificationStatus === verificationFilter;
 
         return matchesSearch && matchesRole && matchesVerification;
       })
@@ -238,6 +253,11 @@ export const AdminUserInsightsSection: React.FC<AdminUserInsightsSectionProps> =
                         <div className="min-w-0">
                           <div className="font-black text-slate-900 truncate">{u.fullName}</div>
                           <div className="text-[10px] text-slate-400 font-bold truncate">{u.email}</div>
+                          {u.location && (
+                            <div className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-2.5 h-2.5 text-brand shrink-0" /> {u.location}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -249,11 +269,30 @@ export const AdminUserInsightsSection: React.FC<AdminUserInsightsSectionProps> =
                         }`}>
                           {u.role}
                         </span>
-                        <span className={`text-[10px] font-bold ${
-                          u.verificationStatus === 'verified' ? 'text-emerald-600' : 'text-slate-400'
-                        }`}>
-                          {u.verificationStatus === 'verified' ? '✓ Verified' : u.verificationStatus}
-                        </span>
+                        {(() => {
+                          const status = u.verificationStatus;
+                          if (status === 'identity_verified' || status === 'verified') {
+                            return <span className="text-[10px] font-bold text-emerald-600">✓ Identity Verified</span>;
+                          }
+                          if (status === 'business_verified') {
+                            return <span className="text-[10px] font-bold text-purple-600">✓ Business Verified</span>;
+                          }
+                          if (status === 'credentials_verified') {
+                            return <span className="text-[10px] font-bold text-indigo-600">✓ Credentials Verified</span>;
+                          }
+                          if (status === 'phone_verified') {
+                            return <span className="text-[10px] font-bold text-blue-600">✓ Phone Verified</span>;
+                          }
+                          if (status === 'pending') {
+                            return <span className="text-[10px] font-bold text-amber-500">⚠ Pending</span>;
+                          }
+                          return <span className="text-[10px] font-bold text-slate-400">Unverified</span>;
+                        })()}
+                        {u.trustScore && (
+                          <div className="text-[9px] text-slate-500 font-medium mt-0.5">
+                            Trust Score: <span className="font-black text-brand">{u.trustScore.score}%</span>
+                          </div>
+                        )}
                       </div>
                     </td>
 

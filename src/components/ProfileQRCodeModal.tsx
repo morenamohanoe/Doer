@@ -3,6 +3,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Download, Share2 } from 'lucide-react';
 import { logError } from '../lib/logger';
+import { useApp } from '../context/AppContext';
+import { copyToClipboard } from './HomeFeed';
 
 interface ProfileQRCodeModalProps {
   isOpen: boolean;
@@ -13,6 +15,7 @@ interface ProfileQRCodeModalProps {
 
 export default function ProfileQRCodeModal({ isOpen, onClose, profileId, profileName }: ProfileQRCodeModalProps) {
   const qrRef = useRef<SVGSVGElement>(null);
+  const { showToast } = useApp();
   
   // Generating a unique URL that would theoretically link to the user's profile
   const profileUrl = `${window.location.origin}/profile/${profileId}`;
@@ -41,15 +44,32 @@ export default function ProfileQRCodeModal({ isOpen, onClose, profileId, profile
   };
 
   const handleShare = async () => {
+    const shareTitle = `${profileName}'s Profile`;
+    const shareText = `Check out ${profileName}'s professional profile!`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${profileName}'s Profile`,
-          text: `Check out ${profileName}'s professional profile!`,
+          title: shareTitle,
+          text: shareText,
           url: profileUrl,
         });
-      } catch (err) {
+      } catch (err: any) {
         logError('Error sharing', err);
+        if (err.name !== 'AbortError') {
+          const success = await copyToClipboard(`${shareTitle} - ${shareText}\n${profileUrl}`);
+          if (success) {
+            showToast('Link copied to clipboard!', 'success');
+          } else {
+            showToast('Failed to copy link.', 'error');
+          }
+        }
+      }
+    } else {
+      const success = await copyToClipboard(`${shareTitle} - ${shareText}\n${profileUrl}`);
+      if (success) {
+        showToast('Link copied to clipboard!', 'success');
+      } else {
+        showToast('Failed to copy link.', 'error');
       }
     }
   };
@@ -108,14 +128,12 @@ export default function ProfileQRCodeModal({ isOpen, onClose, profileId, profile
                   >
                     <Download className="w-4 h-4" /> Save Image
                   </button>
-                  {navigator.share && (
-                    <button 
-                      onClick={handleShare}
-                      className="flex-1 bg-brand hover:bg-brand-hover text-slate-900 font-bold text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <Share2 className="w-4 h-4" /> Share Link
-                    </button>
-                  )}
+                  <button 
+                    onClick={handleShare}
+                    className="flex-1 bg-brand hover:bg-brand-hover text-slate-900 font-bold text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" /> Share Link
+                  </button>
                 </div>
               </div>
             </motion.div>

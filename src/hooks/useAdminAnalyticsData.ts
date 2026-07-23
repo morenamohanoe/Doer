@@ -8,6 +8,7 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { logWarn } from '../lib/logger';
+import { getProperAvatar } from '../utils/avatarUtils';
 import { 
   User, 
   DoerProfile, 
@@ -140,6 +141,7 @@ export interface AdminAnalyticsData {
     fullName: string;
     email: string;
     avatarUrl: string;
+    location?: string;
     role: string;
     verificationStatus: string;
     joinedDate: string;
@@ -153,6 +155,14 @@ export interface AdminAnalyticsData {
     walletBalance: number;
     withdrawalsMade: number;
     portfolioProjects: number;
+    trustScore?: {
+      score: number;
+      level: string;
+      verificationScore: number;
+      reputationScore: number;
+      reliabilityScore: number;
+      activityScore: number;
+    };
   }>;
 }
 
@@ -535,7 +545,7 @@ export function useAdminAnalyticsData(dateRangeFilter: 'today' | '7d' | '30d' | 
       const u = userMap.get(uid);
       const dp = doerProfileMap.get(uid);
       const name = u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (dp?.displayName || 'DOER Member');
-      const avatar = u?.avatarUrl || dp?.profileImageUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80';
+      const avatar = getProperAvatar(u?.avatarUrl || dp?.profileImageUrl, name, uid, u?.gender || dp?.gender);
       const location = u?.city || u?.province || dp?.location || 'South Africa';
       const lastActive = u?.updatedAt || u?.createdAt || new Date().toISOString();
       return { name, avatar, location, lastActive };
@@ -912,6 +922,8 @@ export function useAdminAnalyticsData(dateRangeFilter: 'today' | '7d' | '30d' | 
     // User Insights Table Array
     const userInsights = users.map(u => {
       const uid = u.id || u.uid;
+      const dp = doerProfiles.find(p => p.id === uid || p.uid === uid || p.userId === uid);
+
       const userServices = services.filter(s => s.userId === uid || s.doerId === uid);
       const userActiveServices = userServices.filter(s => s.status !== 'archived');
       
@@ -919,9 +931,9 @@ export function useAdminAnalyticsData(dateRangeFilter: 'today' | '7d' | '30d' | 
       const userRevenue = bookings.filter(b => b.doerId === uid && (b.status === 'completed' || b.status === 'released')).reduce((acc, b) => acc + (b.price || 0), 0);
 
       const userReviewsReceived = reviews.filter(r => r.targetId === uid);
-      const userAvgRating = userReviewsReceived.length > 0 
+      const userAvgRating = dp?.rating || dp?.averageRating || (userReviewsReceived.length > 0 
         ? Number((userReviewsReceived.reduce((acc, r) => acc + (r.rating || 0), 0) / userReviewsReceived.length).toFixed(1))
-        : 5.0;
+        : 5.0);
 
       const userWallet = wallets.find(w => w.userId === uid || w.id === uid || (w as any).uid === uid);
       const userWithdrawals = withdrawals.filter(w => w.userId === uid);
@@ -929,25 +941,38 @@ export function useAdminAnalyticsData(dateRangeFilter: 'today' | '7d' | '30d' | 
 
       const userProjects = portfolioProjects.filter(p => p.userId === uid);
 
+      // Extract details with proper fallback to match source of truth in collections
+      const fullName = u.displayName || dp?.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'DOER Member';
+      const email = u.email || dp?.email || 'No email';
+      const avatarUrl = getProperAvatar(u.avatarUrl || dp?.profileImageUrl, fullName, uid, u.gender || dp?.gender);
+      const location = u.location || dp?.location || (u.city ? (u.province ? `${u.city}, ${u.province}` : u.city) : u.province) || 'Gauteng';
+      const role = u.role || dp?.role || 'doer';
+      const verificationStatus = u.verificationStatus || dp?.verificationStatus || 'unverified';
+      const joinedDate = u.createdAt || dp?.createdAt || new Date().toISOString();
+      const lastActivity = u.updatedAt || dp?.updatedAt || u.createdAt || dp?.createdAt || new Date().toISOString();
+      const trustScore = dp?.trustScore || { score: 10, verificationScore: 10, reputationScore: 0, reliabilityScore: 0, activityScore: 0, level: 'New User' };
+
       return {
         id: uid,
         uid: uid,
-        fullName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'DOER Member',
-        email: u.email || 'No email',
-        avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80',
-        role: u.role || 'doer',
-        verificationStatus: u.verificationStatus || 'unverified',
-        joinedDate: u.createdAt || new Date().toISOString(),
-        lastActivity: u.updatedAt || u.createdAt || new Date().toISOString(),
+        fullName,
+        email,
+        avatarUrl,
+        location,
+        role,
+        verificationStatus,
+        joinedDate,
+        lastActivity,
         servicesCreated: userServices.length,
         servicesActive: userActiveServices.length,
-        bookingsCompleted: userCompletedBookings.length,
-        revenueGenerated: userRevenue,
-        reviewsReceived: userReviewsReceived.length,
+        bookingsCompleted: dp?.completedJobsCount !== undefined ? dp.completedJobsCount : userCompletedBookings.length,
+        revenueGenerated: dp?.totalEarnings !== undefined ? dp.totalEarnings : (dp?.salesCount !== undefined ? dp.salesCount : userRevenue),
+        reviewsReceived: dp?.reviewCount !== undefined ? dp.reviewCount : userReviewsReceived.length,
         avgRating: userAvgRating,
-        walletBalance: userWallet?.balance || 0,
+        walletBalance: userWallet?.balance !== undefined ? userWallet.balance : (dp?.walletBalance || 0),
         withdrawalsMade,
-        portfolioProjects: userProjects.length
+        portfolioProjects: userProjects.length,
+        trustScore
       };
     });
 

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { getProperAvatar } from '../utils/avatarUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { MediaPreview } from './MediaPreview';
 import {
@@ -37,6 +38,7 @@ import PortfolioMasonryGrid from './PortfolioMasonryGrid';
 import PostServiceModal from './PostServiceModal';
 import ConfirmationModal from './ConfirmationModal';
 import { logError } from '../lib/logger';
+import { copyToClipboard } from './HomeFeed';
 
 interface DoerProfileModalProps {
   doerId: string; // ID of the role profile to display
@@ -67,15 +69,35 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
   const isOwnProfile = profile.userId === currentUser.id;
 
   const handleShare = (title: string, text: string) => {
+    const shareUrl = window.location.href;
+    const shareText = `${title} - ${text}`;
     if (navigator.share) {
       navigator.share({
         title,
         text,
-        url: window.location.href,
-      }).catch(logError);
+        url: shareUrl,
+      }).catch((err) => {
+        logError(err);
+        if (err.name !== 'AbortError') {
+          copyToClipboard(`${shareText}\n${shareUrl}`)
+            .then((success) => {
+              if (success) {
+                showToast('Link copied to clipboard!', 'success');
+              } else {
+                showToast('Failed to copy link.', 'error');
+              }
+            });
+        }
+      });
     } else {
-      navigator.clipboard.writeText(`${title} - ${window.location.href}`);
-      showToast('Link copied to clipboard!');
+      copyToClipboard(`${shareText}\n${shareUrl}`)
+        .then((success) => {
+          if (success) {
+            showToast('Link copied to clipboard!', 'success');
+          } else {
+            showToast('Failed to copy link.', 'error');
+          }
+        });
     }
   };
 
@@ -429,7 +451,7 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-white shadow-lg relative bg-white flex-shrink-0">
               <img
                 onClick={(e) => setViewingImage(e.currentTarget.src)}
-                src={profile.profileImageUrl || profile.avatarUrl || (profile.id === 'doer-1' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&fit=crop&q=80' : profile.id === 'doer-2' ? 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&fit=crop&q=80' : profile.id === 'doer-4' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop&q=80' : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&fit=crop&q=80')}
+                src={getProperAvatar(profile.profileImageUrl || profile.avatarUrl, isOwnProfile ? `${currentUser.firstName} ${currentUser.lastName}` : profile.displayName, profile.id || profile.uid, profile.gender)}
                 alt={isOwnProfile ? `${currentUser.firstName} ${currentUser.lastName}` : profile.title}
                 className="w-full h-full object-cover cursor-pointer"
               />
@@ -444,7 +466,7 @@ export default function DoerProfileModal({ doerId, onClose }: DoerProfileModalPr
                     profile.id === 'doer-2' ? 'Anika van der Merwe' :
                     profile.id === 'doer-3' ? 'David Nkosi' :
                     profile.id === 'doer-4' ? 'Naledi Khumalo' :
-                    (profile.displayName && !['freelancer', 'Freelancer'].includes(profile.displayName) ? profile.displayName : (profile.occupation || profile.title || 'Doer'))
+                    (profile.displayName && !['freelancer', 'Freelancer', 'Doer', 'User'].includes(profile.displayName) ? profile.displayName : (profile.occupation ? `${profile.occupation} Specialist` : (profile.title || 'Service Professional')))
                   )}
                 </h2>
                 <span className="bg-brand text-zinc-900 p-0.5 rounded-full text-xs shadow-xs" title="Verified by DOER">
